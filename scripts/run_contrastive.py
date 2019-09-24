@@ -5,9 +5,9 @@ from itertools import chain
 import numpy as np
 import torch
 
-from src.global_infonce_stdim import GlobalInfoNCESpatioTemporalTrainer
+from src.slot_nce import NCETrainer
 from src.utils import get_argparser
-from src.encoders import NatureCNN, ImpalaCNN
+from src.encoders import NatureCNN, ImpalaCNN, SlotEncoder
 import wandb
 from aari.episodes import get_episodes
 
@@ -28,23 +28,17 @@ def train_encoder(args):
                                  min_episode_length=args.batch_size)
 
     observation_shape = tr_eps[0][0].shape
-    if args.encoder_type == "Nature":
-        encoder = NatureCNN(observation_shape[0], args)
-    elif args.encoder_type == "Impala":
-        encoder = ImpalaCNN(observation_shape[0], args)
-    encoder.to(device)
     torch.set_num_threads(1)
-
+    args.obs_space = observation_shape
     config = {}
     config.update(vars(args))
-    config['obs_space'] = observation_shape  # weird hack
-    if args.method == "global-infonce-stdim":
-        trainer = GlobalInfoNCESpatioTemporalTrainer(encoder, config, device=device, wandb=wandb)
+    if args.method == "nce":
+        trainer = NCETrainer(args, device=device, wandb=wandb)
 
     else:
         assert False, "method {} has no trainer".format(args.method)
 
-    trainer.train(tr_eps, val_eps)
+    encoder = trainer.train(tr_eps, val_eps)
 
     return encoder
 
@@ -53,7 +47,7 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
     tags = ['pretraining-only']
-    wandb.init(project=args.wandb_proj, entity="curl-atari", tags=tags)
+    wandb.init(project=args.wandb_proj)
     config = {}
     config.update(vars(args))
     wandb.config.update(config)

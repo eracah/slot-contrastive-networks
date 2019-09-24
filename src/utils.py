@@ -11,13 +11,15 @@ from a2c_ppo_acktr.utils import get_vec_normalize
 from collections import defaultdict
 
 # methods that need encoder trained before
-train_encoder_methods = ['cpc', 'spatial-appo', 'vae', "naff", "infonce-stdim", "global-infonce-stdim",
-                         "global-local-infonce-stdim", "dim"]
+train_encoder_methods = ["nce", "infonce"]
 probe_only_methods = ["supervised", "random-cnn", "majority", "pretrained-rl-agent"]
 
 
 def get_argparser():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--num_slots", type=int, default=8)
+    parser.add_argument("--slot_len", type=int, default=64)
+    parser.add_argument("--fmap_num", default="f7")
     parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',
                         help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
     parser.add_argument('--num-frame-stack', type=int, default=1,
@@ -58,7 +60,7 @@ def get_argparser():
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--color", action='store_true', default=False)
     parser.add_argument("--end-with-relu", action='store_true', default=False)
-    parser.add_argument("--wandb-proj", type=str, default="curl-atari-neurips-scratch")
+    parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--num-rew-evals", type=int, default=10)
     # rl-probe specific arguments
     parser.add_argument("--checkpoint-index", type=int, default=-1)

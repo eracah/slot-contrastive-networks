@@ -1,0 +1,10 @@
+*.json
+*.txt
+*.csv
+*.yaml
+*.jsonl
+*.log
+*.patch
+*.iml
+*.xml
+*.pt
