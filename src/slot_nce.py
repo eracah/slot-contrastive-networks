@@ -33,7 +33,7 @@ class NCETrainer(Trainer):
         self.device = device
         self.optimizer = torch.optim.Adam(list(self.score_fxn.parameters()) + list(self.encoder.parameters()),
                                           lr=args.lr, eps=1e-5)
-        self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, wandb=self.wandb, name="encoder")
+        self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, name="encoder")
         self.transform = transforms.Compose([Cutout(n_holes=1, length=80)])
 
     def generate_batch(self, episodes):
@@ -93,10 +93,24 @@ class NCETrainer(Trainer):
 
             """Loss 2:  Does a pair of vectors close in time come from the 
                         same slot of different slots"""
-            # pass for now
-            loss2 = 0.0
+            loss2 = []
+            for i in range(self.encoder.num_slots):
+                slot_t_i = slots_t[:,i]
+                logits = []
+                batch_size = slot_t_i.shape[0]
+                ground_truth = i * torch.ones((batch_size,)).long()
+                for j in range(self.encoder.num_slots):
+                    slot_pos_j = slots_pos[:,j]
+                    # when i = j this is a postive logit
+                    logit = self.score_fxn(slot_t_i, slot_pos_j)
+                    logits.append(logit)
+                logits = torch.cat(logits,dim=1)
+                loss2i = nn.CrossEntropyLoss()(logits, ground_truth)
+                loss2.append(loss2i)
 
-            loss = loss1 # + loss2
+            loss2 = np.sum(loss2)
+
+            loss = loss1 + loss2
 
             self.optimizer.zero_grad()
             if mode == "train":
@@ -119,10 +133,10 @@ class NCETrainer(Trainer):
 
             if self.early_stopper.early_stop:
                 break
-        torch.save(self.encoder.state_dict(), os.path.join(self.wandb.run.dir, self.args.env_name + '.pt'))
+        #torch.save(self.encoder.state_dict(), os.path.join(self.wandb.run.dir, self.args.env_name + '.pt'))
         return self.encoder
 
     def log_results(self, epoch_idx, epoch_loss, prefix=""):
         print("{} Epoch: {}, Epoch Loss: {}, {}".format(prefix.capitalize(), epoch_idx, epoch_loss,
                                                                      prefix.capitalize()))
-        self.wandb.log({prefix + '_loss': epoch_loss}, step=epoch_idx)
+        #self.wandb.log({prefix + '_loss': epoch_loss}, step=epoch_idx)

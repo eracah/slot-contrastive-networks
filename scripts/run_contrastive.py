@@ -33,7 +33,7 @@ def train_encoder(args):
     config = {}
     config.update(vars(args))
     if args.method == "nce":
-        trainer = NCETrainer(args, device=device, wandb=wandb)
+        trainer = NCETrainer(args, device=device, wandb=None)
 
     else:
         assert False, "method {} has no trainer".format(args.method)
@@ -47,8 +47,8 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
     tags = ['pretraining-only']
-    wandb.init(project=args.wandb_proj)
+    #wandb.init(project=args.wandb_proj)
     config = {}
     config.update(vars(args))
-    wandb.config.update(config)
+    #wandb.config.update(config)
     train_encoder(args)

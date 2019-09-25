@@ -242,7 +242,7 @@ class appendabledict(defaultdict):
 class EarlyStopping(object):
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
-    def __init__(self, patience=7, verbose=False, wandb=None, name=""):
+    def __init__(self, patience=7, verbose=False, savedir='.', name=""):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -257,7 +257,7 @@ class EarlyStopping(object):
         self.early_stop = False
         self.val_acc_max = 0.
         self.name = name
-        self.wandb = wandb
+        self.savedir = savedir
 
     def __call__(self, val_acc, model):
 
@@ -284,7 +284,7 @@ class EarlyStopping(object):
             print(
                 f'Validation accuracy increased for {self.name}  ({self.val_acc_max:.6f} --> {val_acc:.6f}).  Saving model ...')
 
-        save_dir = self.wandb.run.dir
+        save_dir = self.savedir
         torch.save(model.state_dict(), save_dir + "/" + self.name + ".pt")
         self.val_acc_max = val_acc
 
