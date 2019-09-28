@@ -148,6 +148,26 @@ class SlotEncoder(nn.Module):
         return slots
 
 
+class SlotIWrapper(nn.Module):
+    def __init__(self, slot_encoder, i):
+        super().__init__()
+        self.slot_encoder = slot_encoder
+        self.i = i
+
+    def forward(self,x):
+        slots = self.slot_encoder(x)
+        slot_i = slots[:,self.i]
+        return slot_i
+
+class ConcatenateWrapper(nn.Module):
+    def __init__(self, slot_encoder):
+        super().__init__()
+        self.slot_encoder = slot_encoder
+
+    def forward(self,x):
+        slots = self.slot_encoder(x)
+        return Flatten()(slots)
+
 class ImpalaCNN(nn.Module):
     def __init__(self, input_channels, args):
         super(ImpalaCNN, self).__init__()

@@ -3,15 +3,18 @@ from aari.probe import ProbeTrainer
 
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods
-from src.encoders import NatureCNN, ImpalaCNN
+from src.encoders import NatureCNN, ImpalaCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
 import wandb
 import sys
 from src.majority import majority_baseline
 from aari.episodes import get_episodes
+import pandas as pd
+import numpy as np
+from copy import deepcopy
 
 
 def run_probe(args):
-    wandb.config.update(vars(args))
+    #wandb.config.update(vars(args))
     tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = get_episodes(steps=args.probe_steps,
                                                                                  env_name=args.env_name,
                                                                                  seed=args.seed,
@@ -39,10 +42,7 @@ def run_probe(args):
 
     else:
         observation_shape = tr_eps[0][0].shape
-        if args.encoder_type == "Nature":
-            encoder = NatureCNN(observation_shape[0], args)
-        elif args.encoder_type == "Impala":
-            encoder = ImpalaCNN(observation_shape[0], args)
+        encoder = SlotEncoder(observation_shape[0], args)
 
         if args.weights_path == "None":
             if args.method not in probe_only_methods:
@@ -59,7 +59,9 @@ def run_probe(args):
         test_acc, test_f1score = majority_baseline(tr_labels, test_labels, wandb)
 
     else:
-        trainer = ProbeTrainer(encoder=encoder,
+        cat_slot_enc = ConcatenateWrapper(encoder)
+        trainer = ProbeTrainer(encoder=cat_slot_enc,
+                               representation_len=args.slot_len * args.num_slots,
                                epochs=args.epochs,
                                method_name=args.method,
                                lr=args.probe_lr,
@@ -67,19 +69,69 @@ def run_probe(args):
                                patience=args.patience,
                                wandb=wandb,
                                fully_supervised=(args.method == "supervised"),
-                               save_dir=wandb.run.dir)
+                               save_dir=".")  # wandb.run.dir)
 
         trainer.train(tr_eps, val_eps, tr_labels, val_labels)
-        test_acc, test_f1score = trainer.test(test_eps, test_labels)
+        cat_test_acc, cat_test_f1score = trainer.test(test_eps, test_labels)
+        cat_test_acc.update(cat_test_f1score)
+        all_metrics = cat_test_acc
+        all_metrics = prepend_prefix(all_metrics, "all_slots_")
 
-    print(test_acc, test_f1score)
-    wandb.log(test_acc)
-    wandb.log(test_f1score)
+        accs = []
+        f1s = []
+        for i in range(args.num_slots):
+            slot_i_encoder = SlotIWrapper(encoder,i)
+            trainer = ProbeTrainer(encoder=slot_i_encoder,
+                                   representation_len=args.slot_len,
+                                   epochs=args.epochs,
+                                   method_name=args.method,
+                                   lr=args.probe_lr,
+                                   batch_size=args.batch_size,
+                                   patience=args.patience,
+                                   wandb=wandb,
+                                   fully_supervised=(args.method == "supervised"),
+                                   save_dir=".") #wandb.run.dir)
+
+            trainer.train(tr_eps, val_eps, tr_labels, val_labels)
+            test_acc, test_f1score = trainer.test(test_eps, test_labels)
+            accs.append(deepcopy(test_acc))
+            f1s.append(deepcopy(test_f1score))
+            sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i))
+            sloti_test_f1 = prepend_prefix(test_f1score, "slot{}_".format(i))
+            all_metrics.update(sloti_test_acc)
+            all_metrics.update(sloti_test_f1)
+
+
+    for metrics in [accs, f1s]:
+        df = pd.DataFrame(metrics)
+        df = df[[c for c in df.columns if "avg" not in c]]
+        saps = prepend_prefix(compute_SAP(df), "SAP_")
+        maxes = prepend_prefix(dict(df.max()),"best_slot_")
+        argmaxes = prepend_prefix(dict(df.idxmax()), "slot_index_for_best_")
+        all_metrics.update(saps)
+        all_metrics.update(maxes)
+        all_metrics.update(argmaxes)
+
+
+
+    wandb.log(all_metrics)
+
+
+def compute_SAP(df):
+    return {k: np.abs(df.nlargest(2, [k])[k].diff().iloc[1]) for k in df.columns}
+
+
+
+def prepend_prefix(dictionary, prefix):
+    new_dict = {}
+    for k, v in dictionary.items():
+        new_dict[prefix + k] = v
+    return new_dict
 
 
 if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
     tags = ['probe']
-    wandb.init(project=args.wandb_proj, entity="curl-atari", tags=tags)
+    wandb.init(project=args.wandb_proj, tags=tags)
     run_probe(args)
