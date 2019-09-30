@@ -1,7 +1,7 @@
 import subprocess
 import sys
 base_cmd = "sbatch"
-ss= "launch_scripts/run_gpu_mila.sl"
+ss= "launch_scripts/mila_cluster.sl"
 module = "scripts.run_probe"
 args = [base_cmd, ss, module]
 args.extend(sys.argv[1:])
@@ -28,4 +28,4 @@ for i,env in enumerate(envs):
     sargs.append(name + suffix)
 
     print(" ".join(sargs))
-    #subprocess.run(sargs)
+    subprocess.run(sargs)
