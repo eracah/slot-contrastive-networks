@@ -80,7 +80,7 @@ class NCETrainer(Trainer):
 
                 # binary classification problem: from time t+1 or not
                 # answer is always 0 b/c the first logit is always the positive correct one
-                ground_truth = torch.zeros_like(pos_logits).long().squeeze()
+                ground_truth = torch.zeros_like(pos_logits).long().squeeze().to(self.device)
 
                 loss1i = nn.CrossEntropyLoss()(logits, ground_truth)
                 loss1.append(loss1i)
@@ -94,7 +94,7 @@ class NCETrainer(Trainer):
                 slot_t_i = slots_t[:,i]
                 logits = []
                 batch_size = slot_t_i.shape[0]
-                ground_truth = i * torch.ones((batch_size,)).long()
+                ground_truth = i * torch.ones((batch_size,)).long().to(self.device)
                 for j in range(self.encoder.num_slots):
                     slot_pos_j = slots_pos[:,j]
                     # when i = j this is a postive logit
