@@ -22,6 +22,7 @@ def get_argparser():
     parser.add_argument("--num_slots", type=int, default=3)
     parser.add_argument("--slot_len", type=int, default=64)
     parser.add_argument("--fmap_num", default="f7")
+
     parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',
                         help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
     parser.add_argument('--num-frame-stack', type=int, default=1,
@@ -32,8 +33,7 @@ def get_argparser():
                         help='Number of steps to pretrain representations (default: 100000)')
     parser.add_argument('--probe-steps', type=int, default=50000,
                         help='Number of steps to train probes (default: 30000 )')
-    #     parser.add_argument('--probe-test-steps', type=int, default=15000,
-    #                         help='Number of steps to train probes (default: 15000 )')
+
     parser.add_argument('--num-processes', type=int, default=8,
                         help='Number of parallel environments to collect samples from (default: 8)')
     parser.add_argument('--method', type=str, default='nce',
@@ -58,37 +58,19 @@ def get_argparser():
                         help='Encoder type (Impala or Nature)')
     parser.add_argument('--feature-size', type=int, default=256,
                         help='Size of features')
+
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--color", action='store_true', default=False)
     parser.add_argument("--end-with-relu", action='store_true', default=False)
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--num-rew-evals", type=int, default=10)
-    # rl-probe specific arguments
-    parser.add_argument("--checkpoint-index", type=int, default=-1)
 
-    # naff-specific arguments
-    parser.add_argument("--naff-fc-size", type=int, default=2048,
-                        help="fully connected layer width for naff")
-    parser.add_argument("--pred-offset", type=int, default=1,
-                        help="how many steps in future to predict")
-    # CPC-specific arguments
-    parser.add_argument('--sequence-length', type=int, default=100,
-                        help='Sequence length.')
-    parser.add_argument('--steps-start', type=int, default=0,
-                        help='Number of immediate future steps to ignore.')
-    parser.add_argument('--steps-end', type=int, default=99,
-                        help='Number of future steps to predict.')
-    parser.add_argument('--steps-step', type=int, default=4,
-                        help='Skip every these many frames.')
-    parser.add_argument('--gru-size', type=int, default=256,
-                        help='Hidden size of the GRU layers.')
-    parser.add_argument('--gru-layers', type=int, default=2,
-                        help='Number of GRU layers.')
     parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
                         default="random_agent")
 
     parser.add_argument("--beta", default=1.0)
+
     # probe arguments
     parser.add_argument("--weights-path", type=str, default="None")
     parser.add_argument("--train-encoder", action='store_true', default=True)
