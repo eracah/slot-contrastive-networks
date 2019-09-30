@@ -17,6 +17,7 @@ probe_only_methods = ["supervised", "random-cnn", "majority", "pretrained-rl-age
 
 def get_argparser():
     parser = argparse.ArgumentParser()
+    parser.add_argument("--run-dir", type=str, default=".")
     parser.add_argument("--num_slots", type=int, default=3)
     parser.add_argument("--slot_len", type=int, default=64)
     parser.add_argument("--fmap_num", default="f7")

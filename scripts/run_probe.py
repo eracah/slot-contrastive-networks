@@ -69,7 +69,7 @@ def run_probe(args):
                                patience=args.patience,
                                wandb=wandb,
                                fully_supervised=(args.method == "supervised"),
-                               save_dir=".")  # wandb.run.dir)
+                               save_dir=wandb.run.dir)
 
         trainer.train(tr_eps, val_eps, tr_labels, val_labels)
         cat_test_acc, cat_test_f1score = trainer.test(test_eps, test_labels)
@@ -90,7 +90,7 @@ def run_probe(args):
                                    patience=args.patience,
                                    wandb=wandb,
                                    fully_supervised=(args.method == "supervised"),
-                                   save_dir=".") #wandb.run.dir)
+                                   save_dir=wandb.run.dir)
 
             trainer.train(tr_eps, val_eps, tr_labels, val_labels)
             test_acc, test_f1score = trainer.test(test_eps, test_labels)
@@ -132,6 +132,6 @@ def prepend_prefix(dictionary, prefix):
 if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
-    tags = ['probe']
-    wandb.init(project=args.wandb_proj, tags=tags)
+    tags = ["probe"]
+    wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=tags)
     run_probe(args)
