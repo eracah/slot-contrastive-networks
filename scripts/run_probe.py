@@ -135,4 +135,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     tags = ["probe"]
     wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=tags)
+    config = {}
+    config.update(vars(args))
+    wandb.config.update(config)
     run_probe(args)
+
