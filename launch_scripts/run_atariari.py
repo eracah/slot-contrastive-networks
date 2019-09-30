@@ -2,7 +2,7 @@ import subprocess
 import sys
 base_cmd = "sbatch"
 ss= "launch_scripts/mila_cluster.sl"
-module = "scripts.run_probe"
+module = "scripts/run_probe.py"
 args = [base_cmd, ss, module]
 args.extend(sys.argv[1:])
 args.append("--method nce")
