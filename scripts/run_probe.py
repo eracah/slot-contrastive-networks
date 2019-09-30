@@ -26,7 +26,8 @@ def run_probe(args):
                                                                                  collect_mode=args.probe_collect_mode,
                                                                                  train_mode="probe",
                                                                                  checkpoint_index=args.checkpoint_index,
-                                                                                 min_episode_length=args.batch_size)
+                                                                                 min_episode_length=args.batch_size
+                                                                                 )
 
     print("got episodes!")
 
@@ -69,7 +70,7 @@ def run_probe(args):
                                patience=args.patience,
                                wandb=wandb,
                                fully_supervised=(args.method == "supervised"),
-                               save_dir=wandb.run.dir)
+                               save_dir=wandb.run.dir + "/probe_models")
 
         trainer.train(tr_eps, val_eps, tr_labels, val_labels)
         cat_test_acc, cat_test_f1score = trainer.test(test_eps, test_labels)
@@ -90,7 +91,7 @@ def run_probe(args):
                                    patience=args.patience,
                                    wandb=wandb,
                                    fully_supervised=(args.method == "supervised"),
-                                   save_dir=wandb.run.dir)
+                                   save_dir=wandb.run.dir + "/probe_models")
 
             trainer.train(tr_eps, val_eps, tr_labels, val_labels)
             test_acc, test_f1score = trainer.test(test_eps, test_labels)

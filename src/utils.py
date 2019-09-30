@@ -9,6 +9,7 @@ from sklearn.metrics import f1_score as compute_f1_score
 from a2c_ppo_acktr.envs import make_vec_envs
 from a2c_ppo_acktr.utils import get_vec_normalize
 from collections import defaultdict
+from pathlib import Path
 
 # methods that need encoder trained before
 train_encoder_methods = ["nce", "infonce"]
@@ -259,6 +260,8 @@ class EarlyStopping(object):
         self.val_acc_max = 0.
         self.name = name
         self.savedir = savedir
+        Path(self.savedir).mkdir(parents=True, exist_ok=True)
+
 
     def __call__(self, val_acc, model):
 
@@ -286,47 +289,8 @@ class EarlyStopping(object):
                 f'Validation accuracy increased for {self.name}  ({self.val_acc_max:.6f} --> {val_acc:.6f}).  Saving model ...')
 
         save_dir = self.savedir
+
         torch.save(model.state_dict(), save_dir + "/" + self.name + ".pt")
         self.val_acc_max = val_acc
 
 
-
-class Cutout(object):
-    """Randomly mask out one or more patches from an image.
-    Args:
-        n_holes (int): Number of patches to cut out of each image.
-        length (int): The length (in pixels) of each square patch.
-    """
-
-    def __init__(self, n_holes, length):
-        self.n_holes = n_holes
-        self.length = length
-
-    def __call__(self, img):
-        """
-        Args:
-            img (Tensor): Tensor image of size (C, H, W).
-        Returns:
-            Tensor: Image with n_holes of dimension length x length cut out of it.
-        """
-        h = img.size(1)
-        w = img.size(2)
-
-        mask = np.ones((h, w), np.float32)
-
-        for n in range(self.n_holes):
-            y = np.random.randint(h)
-            x = np.random.randint(w)
-
-            y1 = np.clip(y - self.length // 2, 0, h)
-            y2 = np.clip(y + self.length // 2, 0, h)
-            x1 = np.clip(x - self.length // 2, 0, w)
-            x2 = np.clip(x + self.length // 2, 0, w)
-
-            mask[y1: y2, x1: x2] = 0.
-
-        mask = torch.from_numpy(mask)
-        mask = mask.expand_as(img)
-        img = img * mask
-
-        return img

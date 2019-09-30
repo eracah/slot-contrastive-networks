@@ -1,13 +1,9 @@
-import os
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 import numpy as np
 from torch.utils.data import RandomSampler, BatchSampler
-from src.utils import Cutout
 from src.trainer import Trainer
 from src.utils import EarlyStopping
-from torchvision import transforms
 from src.encoders import SlotEncoder
 
 
@@ -33,8 +29,8 @@ class NCETrainer(Trainer):
         self.device = device
         self.optimizer = torch.optim.Adam(list(self.score_fxn.parameters()) + list(self.encoder.parameters()),
                                           lr=args.lr, eps=1e-5)
-        self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, name="encoder")
-        self.transform = transforms.Compose([Cutout(n_holes=1, length=80)])
+        self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, name="nce",
+                                           savedir=self.wandb.run.dir + "/models")
 
     def generate_batch(self, episodes):
         total_steps = sum([len(e) for e in episodes])
