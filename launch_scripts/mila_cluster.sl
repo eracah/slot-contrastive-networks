@@ -15,7 +15,11 @@
 
 # 3. Launch your job, tell it to save the model in $SLURM_TMPDIR
 #    and look for the dataset into $SLURM_TMPDIR
-python $@ --run-dir $SLURM_TMPDIR
+echo $1
+export module_name=$1
+shift
+echo $module_name
+python -m $module_name  $@ --run-dir $SLURM_TMPDIR
 
 # 4. Copy whatever you want to save on $SCRATCH
 cp $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb

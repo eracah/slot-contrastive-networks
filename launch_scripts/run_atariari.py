@@ -2,10 +2,9 @@ import subprocess
 import sys
 base_cmd = "sbatch"
 ss= "launch_scripts/mila_cluster.sl"
-module = "scripts/run_probe.py"
+module = "scripts.run_probe"
 args = [base_cmd, ss, module]
 args.extend(sys.argv[1:])
-args.append("--method nce")
 
 
 envs = ["breakout", "freeway","montezuma_revenge"]
