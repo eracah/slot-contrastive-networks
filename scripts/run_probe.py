@@ -115,7 +115,7 @@ def run_probe(args):
 
 
 
-    wandb.log(all_metrics)
+    wandb.run.summary.update(all_metrics)
 
 
 def compute_SAP(df):

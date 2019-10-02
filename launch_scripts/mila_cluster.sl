@@ -5,6 +5,7 @@
 #SBATCH --mem=16G                             # Ask for 10 GB of RAM
 #SBATCH --time=24:00:00
 #SBATCH -o /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out  # Write the log on tmp1
+#SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
 
 ## #SBATCH --qos=unkillable                      # Ask for unkillable job
 # 1. Load your environment
