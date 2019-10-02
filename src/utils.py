@@ -28,9 +28,9 @@ def get_argparser():
                         help='Number of frames to stack for a state')
     parser.add_argument('--no-downsample', action='store_true', default=True,
                         help='Whether to use a linear classifier')
-    parser.add_argument('--pretraining-steps', type=int, default=100000,
+    parser.add_argument('--num-frames', type=int, default=100000,
                         help='Number of steps to pretrain representations (default: 100000)')
-    parser.add_argument('--probe-steps', type=int, default=50000,
+    parser.add_argument('--probe-num-frames', type=int, default=50000,
                         help='Number of steps to train probes (default: 30000 )')
 
     parser.add_argument('--num-processes', type=int, default=8,

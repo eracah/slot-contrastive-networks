@@ -15,7 +15,7 @@ from aari.episodes import get_episodes
 def train_encoder(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
-    tr_eps, val_eps = get_episodes(steps=args.pretraining_steps,
+    tr_eps, val_eps = get_episodes(steps=args.num_frames,
                                  env_name=args.env_name,
                                  seed=args.seed,
                                  num_processes=args.num_processes,

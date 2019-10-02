@@ -15,7 +15,7 @@ from copy import deepcopy
 
 def run_probe(args):
     #wandb.config.update(vars(args))
-    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = get_episodes(steps=args.probe_steps,
+    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = get_episodes(steps=args.probe_num_frames,
                                                                                  env_name=args.env_name,
                                                                                  seed=args.seed,
                                                                                  num_processes=args.num_processes,

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --cpus-per-task=4
+#SBATCH --cpus-per-task=6
 #SBATCH --gres=gpu:1                          # Ask for 1 GPU
 #SBATCH --mem=16G                             # Ask for 10 GB of RAM
 #SBATCH --time=24:00:00
