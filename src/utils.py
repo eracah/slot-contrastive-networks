@@ -19,7 +19,7 @@ probe_only_methods = ["supervised", "random-cnn", "majority", "pretrained-rl-age
 def get_argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=str, default=".")
-    parser.add_argument("--num_slots", type=int, default=3)
+    parser.add_argument("--num_slots", type=int, default=8)
     parser.add_argument("--slot_len", type=int, default=64)
     parser.add_argument("--fmap_num", default="f7")
     parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',
@@ -37,7 +37,7 @@ def get_argparser():
                         help='Number of parallel environments to collect samples from (default: 8)')
     parser.add_argument('--method', type=str, default='nce',
                         choices=train_encoder_methods + probe_only_methods,
-                        help='Method to use for training representations (default: infonce-stdim)')
+                        help='Method to use for training representations (default: nce')
     parser.add_argument('--linear', action='store_true', default=True,
                         help='Whether to use a linear classifier')
     parser.add_argument('--use-multiple-predictors', action='store_true', default=False,

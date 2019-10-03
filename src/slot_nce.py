@@ -89,8 +89,8 @@ class NCETrainer(Trainer):
 
 
             loss1 = np.sum(loss1)
-            self.log_results(iteration, loss1, type_="iteration", prefix=mode)
-            print("\t loss1 iter time {} ".format(time.time() - t10))
+            # self.log_results(iteration, loss1, type_="iteration", prefix=mode)
+            # print("\t loss1 iter time {} ".format(time.time() - t10))
             #self.wandb.log({"loss1": loss1}, step=iteration)
 
 
@@ -115,8 +115,8 @@ class NCETrainer(Trainer):
 
 
             loss2 = np.sum(loss2)
-            self.log_results(iteration, loss2, type_="iteration", prefix=mode)
-            print("\t loss2 iter time {} ".format(time.time() - t20))
+            # self.log_results(iteration, loss2, type_="iteration", prefix=mode)
+            # print("\t loss2 iter time {} ".format(time.time() - t20))
             #self.wandb.log({"loss2": loss2}, step=iteration)
 
             loss = loss1 + loss2

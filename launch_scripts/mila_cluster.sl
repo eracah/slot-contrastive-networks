@@ -1,8 +1,9 @@
 #!/bin/bash
 
-#SBATCH --cpus-per-task=6
-#SBATCH --gres=gpu:1                          # Ask for 1 GPU
-#SBATCH --mem=16G                             # Ask for 10 GB of RAM
+
+#SBATCH --gres=gpu:1
+#SBATCH --mem=50G
+#SBATCH -c 8
 #SBATCH --time=24:00:00
 #SBATCH -o /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out  # Write the log on tmp1
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
