@@ -1,13 +1,12 @@
 from scripts.run_contrastive import train_encoder
-from aari.probe import ProbeTrainer
-
+from atariari.probe import ProbeTrainer, SKLearnProbeTrainer
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods
 from src.encoders import NatureCNN, ImpalaCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
 import wandb
 import sys
 from src.majority import majority_baseline
-from aari.episodes import get_episodes
+from atariari.episodes import get_episodes
 import pandas as pd
 import numpy as np
 from copy import deepcopy
@@ -61,19 +60,14 @@ def run_probe(args):
 
     else:
         cat_slot_enc = ConcatenateWrapper(encoder)
-        trainer = ProbeTrainer(encoder=cat_slot_enc,
-                               representation_len=args.slot_len * args.num_slots,
+        trainer = SKLearnProbeTrainer(encoder=cat_slot_enc,
                                epochs=args.epochs,
-                               method_name=args.method,
                                lr=args.probe_lr,
-                               batch_size=args.batch_size,
-                               patience=args.patience,
-                               wandb=wandb,
-                               fully_supervised=(args.method == "supervised"),
-                               save_dir=wandb.run.dir + "/probe_models")
+                               patience=args.patience)
+        cat_test_acc, cat_test_f1score = trainer.train_test(tr_eps, val_eps, tr_labels,
+                                                    val_labels, test_eps, test_labels)
 
-        trainer.train(tr_eps, val_eps, tr_labels, val_labels)
-        cat_test_acc, cat_test_f1score = trainer.test(test_eps, test_labels)
+
         cat_test_acc.update(cat_test_f1score)
         all_metrics = cat_test_acc
         all_metrics = prepend_prefix(all_metrics, "all_slots_")
@@ -82,19 +76,12 @@ def run_probe(args):
         f1s = []
         for i in range(args.num_slots):
             slot_i_encoder = SlotIWrapper(encoder,i)
-            trainer = ProbeTrainer(encoder=slot_i_encoder,
-                                   representation_len=args.slot_len,
-                                   epochs=args.epochs,
-                                   method_name=args.method,
-                                   lr=args.probe_lr,
-                                   batch_size=args.batch_size,
-                                   patience=args.patience,
-                                   wandb=wandb,
-                                   fully_supervised=(args.method == "supervised"),
-                                   save_dir=wandb.run.dir + "/probe_models")
-
-            trainer.train(tr_eps, val_eps, tr_labels, val_labels)
-            test_acc, test_f1score = trainer.test(test_eps, test_labels)
+            trainer = SKLearnProbeTrainer(encoder= slot_i_encoder,
+                                          epochs=args.epochs,
+                                          lr=args.probe_lr,
+                                          patience=args.patience)
+            test_acc, test_f1score = trainer.train_test(tr_eps, val_eps, tr_labels,
+                                                                val_labels, test_eps, test_labels)
             accs.append(deepcopy(test_acc))
             f1s.append(deepcopy(test_f1score))
             sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i))
@@ -107,6 +94,8 @@ def run_probe(args):
         df = pd.DataFrame(metrics)
         df = df[[c for c in df.columns if "avg" not in c]]
         saps = prepend_prefix(compute_SAP(df), "SAP_")
+        avg_sap = np.mean(list(saps.values()))
+        all_metrics["sap_avg"] = avg_sap
         maxes = prepend_prefix(dict(df.max()),"best_slot_")
         argmaxes = prepend_prefix(dict(df.idxmax()), "slot_index_for_best_")
         all_metrics.update(saps)

@@ -9,7 +9,7 @@ from src.slot_nce import NCETrainer
 from src.utils import get_argparser
 from src.encoders import NatureCNN, ImpalaCNN, SlotEncoder
 import wandb
-from aari.episodes import get_episodes
+from atariari.episodes import get_episodes
 
 
 def train_encoder(args):
