@@ -1,5 +1,5 @@
 from scripts.run_contrastive import train_encoder
-from atariari.future import  SKLearnProbeTrainer, get_feature_vectors
+from src.future import  SKLearnProbeTrainer, get_feature_vectors
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods
 from src.encoders import NatureCNN, ImpalaCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
