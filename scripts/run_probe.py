@@ -61,7 +61,7 @@ def run_probe(args):
     else:
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
-
+        encoder.cpu()
         cat_slot_enc = ConcatenateWrapper(encoder)
 
         f_tr, y_tr = get_feature_vectors(cat_slot_enc, tr_eps, tr_labels)
@@ -83,7 +83,6 @@ def run_probe(args):
         f1s = []
         for i in range(args.num_slots):
             slot_i_enc = SlotIWrapper(encoder,i)
-            slot_i_enc.cpu()
             f_tr, y_tr = get_feature_vectors(slot_i_enc, tr_eps, tr_labels)
             f_test, y_test = get_feature_vectors(slot_i_enc, test_eps, test_labels)
             trainer = SKLearnProbeTrainer(epochs=args.epochs,
