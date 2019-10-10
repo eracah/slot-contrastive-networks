@@ -1,5 +1,5 @@
 from scripts.run_contrastive import train_encoder
-from atariari.probe import ProbeTrainer, SKLearnProbeTrainer
+from atariari.future import  SKLearnProbeTrainer, get_feature_vectors
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods
 from src.encoders import NatureCNN, ImpalaCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
@@ -59,56 +59,73 @@ def run_probe(args):
         test_acc, test_f1score = majority_baseline(tr_labels, test_labels, wandb)
 
     else:
+        tr_eps.extend(val_eps)
+        tr_labels.extend(val_labels)
+
         cat_slot_enc = ConcatenateWrapper(encoder)
-        trainer = SKLearnProbeTrainer(encoder=cat_slot_enc,
-                               epochs=args.epochs,
-                               lr=args.probe_lr,
-                               patience=args.patience)
-        cat_test_acc, cat_test_f1score = trainer.train_test(tr_eps, val_eps, tr_labels,
-                                                    val_labels, test_eps, test_labels)
+
+        f_tr, y_tr = get_feature_vectors(cat_slot_enc, tr_eps, tr_labels)
+        f_test, y_test = get_feature_vectors(cat_slot_enc, test_eps, test_labels)
+        trainer = SKLearnProbeTrainer(epochs=args.epochs,
+                                      lr=args.probe_lr,
+                                      patience=args.patience)
+
+        cat_test_acc, cat_test_f1 = trainer.train_test(f_tr, y_tr, f_test, y_test)
+
+        cat_test_acc = prepend_prefix(cat_test_acc, "all_slots_")
+        wandb.run.summary.update(cat_test_acc)
+        cat_test_f1 = prepend_prefix(cat_test_f1, "all_slots_")
+        wandb.run.summary.update(cat_test_f1)
 
 
-        cat_test_acc.update(cat_test_f1score)
-        all_metrics = cat_test_acc
-        all_metrics = prepend_prefix(all_metrics, "all_slots_")
 
         accs = []
         f1s = []
         for i in range(args.num_slots):
-            slot_i_encoder = SlotIWrapper(encoder,i)
-            trainer = SKLearnProbeTrainer(encoder= slot_i_encoder,
-                                          epochs=args.epochs,
+            slot_i_enc = SlotIWrapper(encoder,i)
+            f_tr, y_tr = get_feature_vectors(slot_i_enc, tr_eps, tr_labels)
+            f_test, y_test = get_feature_vectors(slot_i_enc, test_eps, test_labels)
+            trainer = SKLearnProbeTrainer(epochs=args.epochs,
                                           lr=args.probe_lr,
                                           patience=args.patience)
-            test_acc, test_f1score = trainer.train_test(tr_eps, val_eps, tr_labels,
-                                                                val_labels, test_eps, test_labels)
+
+            test_acc, test_f1score = trainer.train_test(f_tr, y_tr, f_test, y_test)
+
             accs.append(deepcopy(test_acc))
             f1s.append(deepcopy(test_f1score))
-            sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i))
-            sloti_test_f1 = prepend_prefix(test_f1score, "slot{}_".format(i))
-            all_metrics.update(sloti_test_acc)
-            all_metrics.update(sloti_test_f1)
+            sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i+1))
+            sloti_test_f1 = prepend_prefix(test_f1score, "slot{}_".format(i+1))
+            wandb.run.summary.update(sloti_test_acc)
+            wandb.run.summary.update(sloti_test_f1)
 
 
     for metrics in [accs, f1s]:
         df = pd.DataFrame(metrics)
         df = df[[c for c in df.columns if "avg" not in c]]
-        saps = prepend_prefix(compute_SAP(df), "SAP_")
-        avg_sap = np.mean(list(saps.values()))
-        all_metrics["sap_avg"] = avg_sap
+        saps_compactness = prepend_prefix(compute_SAP(df), "SAP_Compactness_")
+        wandb.run.summary.update(saps_compactness)
+        avg_sap_compactness = np.mean(list(saps_compactness.values()))
+        wandb.run.summary.update({"avg_sap_compactness": avg_sap_compactness})
+
+        saps_modularity = prepend_prefix(compute_SAP(df.T), "SAP_Modularity_")
+        avg_sap_modularity = np.mean(list(saps_modularity.values()))
+        wandb.run.summary.update(saps_modularity)
+        wandb.run.summary.update({"avg_sap_modularity": avg_sap_modularity})
+
+
+
         maxes = prepend_prefix(dict(df.max()),"best_slot_")
         argmaxes = prepend_prefix(dict(df.idxmax()), "slot_index_for_best_")
-        all_metrics.update(saps)
-        all_metrics.update(maxes)
-        all_metrics.update(argmaxes)
+        wandb.run.summary.update(maxes)
+        wandb.run.summary.update(argmaxes)
 
 
 
-    wandb.run.summary.update(all_metrics)
 
 
 def compute_SAP(df):
-    return {k: np.abs(df.nlargest(2, [k])[k].diff().iloc[1]) for k in df.columns}
+
+    return {str(k): np.abs(df.nlargest(2, [k])[k].diff().iloc[1]) for k in df.columns}
 
 
 
