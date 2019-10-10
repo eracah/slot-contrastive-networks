@@ -57,7 +57,6 @@ class SKLearnProbeTrainer(object):
                                        tol=1e-3)
 
 
-
     def train_test(self, f_tr, y_tr, f_test,y_test):
         acc_dict, f1_dict = {}, {}
         for label_name in y_tr.keys():
@@ -73,9 +72,8 @@ class SKLearnProbeTrainer(object):
             self.estimator.fit(x_tr, tr_labels )
             y_pred = self.estimator.predict(f_test)
             accuracy = calculate_multiclass_accuracy(y_pred, test_labels)
-            warnings.filterwarnings('always')
-            f1score = calculate_multiclass_f1_score(y_pred, test_labels)
             warnings.filterwarnings('ignore')
+            f1score = calculate_multiclass_f1_score(y_pred, test_labels)
             print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
             acc_dict[label_name] = accuracy
             f1_dict[label_name] = f1score
