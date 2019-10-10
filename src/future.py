@@ -53,7 +53,8 @@ class SKLearnProbeTrainer(object):
                                        max_iter=self.epochs,
                                        early_stopping=True,
                                        n_iter_no_change=self.patience,
-                                       validation_fraction=0.2)
+                                       validation_fraction=0.2,
+                                       tol=1e-3)
 
 
 
@@ -72,8 +73,9 @@ class SKLearnProbeTrainer(object):
             self.estimator.fit(x_tr, tr_labels )
             y_pred = self.estimator.predict(f_test)
             accuracy = calculate_multiclass_accuracy(y_pred, test_labels)
-            warnings.filterwarnings('ignore')
+            warnings.filterwarnings('always')
             f1score = calculate_multiclass_f1_score(y_pred, test_labels)
+            warnings.filterwarnings('ignore')
             print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
             acc_dict[label_name] = accuracy
             f1_dict[label_name] = f1score
