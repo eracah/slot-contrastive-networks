@@ -7,7 +7,7 @@ import torch
 
 from src.slot_nce import NCETrainer
 from src.utils import get_argparser
-from src.encoders import NatureCNN, ImpalaCNN, SlotEncoder
+from src.encoders import NatureCNN, SlotEncoder
 import wandb
 import os
 from atariari.episodes import get_episodes
