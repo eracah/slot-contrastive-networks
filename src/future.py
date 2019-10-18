@@ -60,6 +60,7 @@ class SKLearnProbeTrainer(object):
         self.patience = patience
         self.num_processes = num_processes
 
+
         self.estimator = SGDClassifier(loss='log',
                                        n_jobs=self.num_processes,
                                        penalty='none',
@@ -72,6 +73,21 @@ class SKLearnProbeTrainer(object):
                                        n_iter_no_change=self.patience,
                                        validation_fraction=0.2,
                                        tol=1e-3)
+
+    def reset_estimator(self):
+        self.estimator = SGDClassifier(loss='log',
+                                       n_jobs=self.num_processes,
+                                       penalty='none',
+                                       l1_ratio=0.0,
+                                       alpha=0,
+                                       learning_rate='constant',
+                                       eta0=self.lr,
+                                       max_iter=self.epochs,
+                                       early_stopping=True,
+                                       n_iter_no_change=self.patience,
+                                       validation_fraction=0.2,
+                                       tol=1e-3)
+
 
 
     def train_test(self, f_tr, y_tr, f_test,y_test):
@@ -89,6 +105,8 @@ class SKLearnProbeTrainer(object):
             self.estimator.fit(x_tr, tr_labels )
             y_pred = self.estimator.predict(f_test)
             accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
+            # if label_name == "player_x":
+            #     print("hey")
             warnings.filterwarnings('ignore')
             f1score = compute_f1_score(test_labels, y_pred,  average="weighted")
             print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
@@ -96,7 +114,7 @@ class SKLearnProbeTrainer(object):
             f1_dict[label_name] = f1score
 
             # reset estimator
-            self.estimator = clone(self.estimator)
+            self.reset_estimator()
 
         acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
 
