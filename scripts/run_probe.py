@@ -6,7 +6,7 @@ from src.encoders import NatureCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
 import wandb
 import sys
 from src.majority import majority_baseline
-from atariari.episodes import get_episodes
+from atariari.benchmark.episodes import get_episodes
 import pandas as pd
 import numpy as np
 from copy import deepcopy

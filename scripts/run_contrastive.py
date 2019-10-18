@@ -10,7 +10,7 @@ from src.utils import get_argparser
 from src.encoders import NatureCNN, SlotEncoder
 import wandb
 import os
-from atariari.episodes import get_episodes
+from atariari.benchmark.episodes import get_episodes
 
 
 def train_encoder(args):
