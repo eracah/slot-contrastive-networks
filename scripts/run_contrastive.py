@@ -9,13 +9,14 @@ from src.slot_nce import NCETrainer
 from src.utils import get_argparser
 from src.encoders import NatureCNN, ImpalaCNN, SlotEncoder
 import wandb
+import os
 from atariari.episodes import get_episodes
 
 
 def train_encoder(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
-    if str(device) != "cuda":
+    if str(device) != "cuda" and os.environ["HOME"] != '/Users/evanracah':
         assert False, "device must be cuda!"
     tr_eps, val_eps = get_episodes(steps=args.num_frames,
                                  env_name=args.env_name,
