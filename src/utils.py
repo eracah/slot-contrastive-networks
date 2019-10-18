@@ -22,6 +22,7 @@ def get_argparser():
     parser.add_argument("--num_slots", type=int, default=8)
     parser.add_argument("--slot_len", type=int, default=256)
     parser.add_argument("--fmap_num", default="f7")
+    parser.add_argument("--loss1_coeff", type=int, default=1)
     parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',
                         help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
     parser.add_argument('--num-frame-stack', type=int, default=1,
