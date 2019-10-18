@@ -2,7 +2,7 @@ from scripts.run_contrastive import train_encoder
 from src.future import  SKLearnProbeTrainer, get_feature_vectors
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods
-from src.encoders import NatureCNN, ImpalaCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
+from src.encoders import NatureCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
 import wandb
 import sys
 from src.majority import majority_baseline
@@ -72,8 +72,8 @@ def run_probe(args):
 
         cat_test_acc, cat_test_f1 = trainer.train_test(f_tr, y_tr, f_test, y_test)
 
-        cat_test_acc = prepend_prefix(cat_test_acc, "all_slots_")
-        wandb.run.summary.update(cat_test_acc)
+        # cat_test_acc = prepend_prefix(cat_test_acc, "all_slots_")
+        # wandb.run.summary.update(cat_test_acc)
         cat_test_f1 = prepend_prefix(cat_test_f1, "all_slots_")
         wandb.run.summary.update(cat_test_f1)
 
@@ -93,38 +93,41 @@ def run_probe(args):
 
             accs.append(deepcopy(test_acc))
             f1s.append(deepcopy(test_f1score))
-            sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i+1))
-            sloti_test_f1 = prepend_prefix(test_f1score, "slot{}_".format(i+1))
-            wandb.run.summary.update(sloti_test_acc)
-            wandb.run.summary.update(sloti_test_f1)
+            # sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i+1))
+            #sloti_test_f1 = prepend_prefix(test_f1score, "slot{}_".format(i+1))
+            # wandb.run.summary.update(sloti_test_acc)
+            #wandb.run.summary.update(sloti_test_f1)
 
 
-    for metrics in [accs, f1s]:
+    for metrics in [f1s]:
         df = pd.DataFrame(metrics)
         df = df[[c for c in df.columns if "avg" not in c]]
         saps_compactness = prepend_prefix(compute_SAP(df), "SAP_Compactness_")
-        wandb.run.summary.update(saps_compactness)
+        #wandb.run.summary.update(saps_compactness)
         avg_sap_compactness = np.mean(list(saps_compactness.values()))
         wandb.run.summary.update({"avg_sap_compactness": avg_sap_compactness})
 
         saps_modularity = prepend_prefix(compute_SAP(df.T), "SAP_Modularity_")
         avg_sap_modularity = np.mean(list(saps_modularity.values()))
-        wandb.run.summary.update(saps_modularity)
+        #wandb.run.summary.update(saps_modularity)
         wandb.run.summary.update({"avg_sap_modularity": avg_sap_modularity})
 
 
 
         maxes = prepend_prefix(dict(df.max()),"best_slot_")
-        argmaxes = prepend_prefix(dict(df.idxmax()), "slot_index_for_best_")
-        wandb.run.summary.update(maxes)
-        wandb.run.summary.update(argmaxes)
+        avg_of_bests = np.mean(list(maxes.values()))
+        wandb.run.summary.update({"avg_of_best_slots": avg_of_bests})
+        # argmaxes = prepend_prefix(dict(df.idxmax()), "slot_index_for_best_")
+        # wandb.run.summary.update(maxes)
+        # wandb.run.summary.update(argmaxes)
 
 
 
 
+def compute_variance(df):
+    pass
 
 def compute_SAP(df):
-
     return {str(k): np.abs(df.nlargest(2, [k])[k].diff().iloc[1]) for k in df.columns}
 
 
