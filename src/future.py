@@ -1,10 +1,11 @@
 import torch
-from atariari.utils import  appendabledict, calculate_multiclass_accuracy, calculate_multiclass_f1_score
+from atariari.benchmark.utils import appendabledict
 from copy import deepcopy
 import numpy as np
 from sklearn.linear_model import SGDClassifier
 from sklearn.base import clone
-from atariari.probe import postprocess_raw_metrics
+from atariari.benchmark.probe import postprocess_raw_metrics
+from sklearn.metrics import f1_score as compute_f1_score
 import warnings
 
 """Usage:
@@ -28,6 +29,22 @@ def get_feature_vectors(encoder, episodes, episode_labels):
         vectors.append(z)
     vectors = np.concatenate(vectors)
     return vectors, labels
+
+
+def calculate_f1_score(logits, labels):
+    preds = np.argmax(logits, axis=1)
+    f1score = compute_f1_score(labels, preds, average="weighted")
+    return f1score
+
+
+def calculate_accuracy(logits, labels, argmax=True):
+    if argmax:
+        preds = np.argmax(logits, axis=1)
+    else:
+        preds = logits
+    correct_or_not = (preds == labels).astype(int)
+    acc = np.mean(correct_or_not)
+    return acc, correct_or_not
 
 
 
@@ -71,9 +88,9 @@ class SKLearnProbeTrainer(object):
             x_tr = np.stack([x_tr[ind] for ind in inds])
             self.estimator.fit(x_tr, tr_labels )
             y_pred = self.estimator.predict(f_test)
-            accuracy = calculate_multiclass_accuracy(y_pred, test_labels)
+            accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
             warnings.filterwarnings('ignore')
-            f1score = calculate_multiclass_f1_score(y_pred, test_labels)
+            f1score = compute_f1_score(test_labels, y_pred,  average="weighted")
             print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
             acc_dict[label_name] = accuracy
             f1_dict[label_name] = f1score
