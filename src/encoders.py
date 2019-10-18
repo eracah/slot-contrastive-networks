@@ -117,14 +117,16 @@ class SlotAddOn(nn.Module):
         self.slot_len = slot_len
         num_inp_channels, h, w = inp_shape
         self.slot_conv = nn.Conv2d(num_inp_channels, num_slots, 1)
-        self.slot_fc = nn.Linear(h*w, slot_len)
+        self.slot_mlp = nn.Sequential(nn.Linear(h*w, slot_len),
+                                     nn.ReLU(),
+                                     nn.Linear(slot_len, slot_len) )
 
     def forward(self,inp):
         slot_fmaps = self.slot_conv(inp)
         slots = []
         for i in range(self.num_slots):
             slot_fmap = slot_fmaps[:, i]
-            slot = self.slot_fc(Flatten()(slot_fmap))
+            slot = self.slot_mlp(Flatten()(slot_fmap))
             slots.append(slot)
         slots = torch.stack(slots, dim=1)
         #slots = torch.cat([self.slot_fc(slot_fmap) for slot_fmap in slot_fmaps])
@@ -168,38 +170,3 @@ class ConcatenateWrapper(nn.Module):
         slots = self.slot_encoder(x)
         return Flatten()(slots)
 
-class ImpalaCNN(nn.Module):
-    def __init__(self, input_channels, args):
-        super(ImpalaCNN, self).__init__()
-        self.hidden_size = args.feature_size
-        self.depths = [16, 32, 32, 32]
-        self.downsample = not args.no_downsample
-        self.layer1 = self._make_layer(input_channels, self.depths[0])
-        self.layer2 = self._make_layer(self.depths[0], self.depths[1])
-        self.layer3 = self._make_layer(self.depths[1], self.depths[2])
-        self.layer4 = self._make_layer(self.depths[2], self.depths[3])
-        if self.downsample:
-            self.final_conv_size = 32 * 9 * 9
-        else:
-            self.final_conv_size = 32 * 12 * 9
-        self.final_linear = nn.Linear(self.final_conv_size, self.hidden_size)
-        self.flatten = Flatten()
-        self.train()
-
-    def _make_layer(self, in_channels, depth):
-        return nn.Sequential(
-            Conv2dSame(in_channels, depth, 3),
-            nn.MaxPool2d(3, stride=2),
-            nn.ReLU(),
-            ResidualBlock(depth, depth),
-            nn.ReLU(),
-            ResidualBlock(depth, depth)
-        )
-
-    def forward(self, inputs):
-        out = inputs
-        if self.downsample:
-            out = self.layer3(self.layer2(self.layer1(out)))
-        else:
-            out = self.layer4(self.layer3(self.layer2(self.layer1(out))))
-        return F.relu(self.final_linear(self.flatten(out)))
