@@ -116,6 +116,6 @@ class SKLearnProbeTrainer(object):
             # reset estimator
             self.reset_estimator()
 
-        acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
+        #acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
 
         return acc_dict, f1_dict
