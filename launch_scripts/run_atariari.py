@@ -7,7 +7,7 @@ args = [base_cmd, ss, module]
 args.extend(sys.argv[1:])
 
 
-envs = ["breakout", "freeway","montezuma_revenge"]
+envs = ["pong", "freeway" ,"ms_pacman"]
 
 # envs =  ["asteroids", "freeway", "montezuma_revenge", 'berzerk', 'boxing',
 #         'demon_attack', 'enduro', 'freeway', 'frostbite', 'hero',
