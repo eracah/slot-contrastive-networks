@@ -154,7 +154,8 @@ class NCETrainer(Trainer):
         epoch_loss2 = np.mean(loss2s)
         epoch_loss1_slots = {k: np.mean(v) for k, v in loss1_slots.items()}
         epoch_loss2_slots = {k: np.mean(v) for k, v in loss2_slots.items()}
-        other_losses = dict(loss1=epoch_loss1, loss2=epoch_loss2)
+        loss_terms = {mode + "_loss1":epoch_loss1, mode + "_loss2":epoch_loss2}
+        other_losses = {}
         other_losses.update(epoch_loss1_slots)
         other_losses.update(epoch_loss2_slots)
         other_losses = {mode + "_" + k: v for k,v in other_losses.items()}
@@ -164,7 +165,8 @@ class NCETrainer(Trainer):
         epoch_acc2 = np.mean(acc2s)
         epoch_acc1_slots = {k: np.mean(v) for k, v in acc1_slots.items()}
         epoch_acc2_slots = {k: np.mean(v) for k, v in acc2_slots.items()}
-        other_accs = dict(acc1=epoch_acc1, acc2=epoch_acc2)
+        acc_terms = {mode + "_acc1": epoch_loss1, mode + "_acc2": epoch_loss2}
+        other_accs = {}
         other_accs.update(epoch_acc1_slots)
         other_accs.update(epoch_acc2_slots)
         other_accs = {mode + "_" + k: v for k, v in other_accs.items()}
@@ -178,21 +180,25 @@ class NCETrainer(Trainer):
             self.early_stopper1(-epoch_loss1, self.encoder)
             self.early_stopper2(-epoch_loss2, self.encoder)
 
-        return epoch_loss, other_losses, epoch_acc, other_accs
+        return epoch_loss, other_losses, epoch_acc, other_accs, acc_terms, loss_terms
 
     def train(self, tr_eps, val_eps):
         for epoch in range(self.epochs):
             print("Epoch {}".format(epoch))
             self.encoder.train(), self.score_fxn.train()
-            tr_loss, other_tr_losses, tr_acc, other_tr_accs = self.do_one_epoch(epoch, tr_eps)
-            self.wandb.log(other_tr_losses, step=epoch)
-            self.wandb.log(other_tr_accs, step=epoch)
+            tr_loss, other_tr_losses, tr_acc, other_tr_accs, tr_acc_terms, tr_loss_terms = self.do_one_epoch(epoch, tr_eps)
+            self.wandb.log(tr_loss_terms, step=epoch)
+            self.wandb.log(tr_acc_terms, step=epoch)
+            # self.wandb.log(other_tr_losses, step=epoch)
+            # self.wandb.log(other_tr_accs, step=epoch)
 
 
             self.encoder.eval(), self.score_fxn.eval()
-            val_loss, other_val_losses, val_acc, other_val_accs = self.do_one_epoch(epoch, val_eps)
-            self.wandb.log(other_val_losses, step=epoch)
-            self.wandb.log(other_val_accs, step=epoch)
+            val_loss, other_val_losses, val_acc, other_val_accs, val_acc_terms, val_loss_terms = self.do_one_epoch(epoch, val_eps)
+            self.wandb.log(val_loss_terms, step=epoch)
+            self.wandb.log(val_acc_terms, step=epoch)
+            # self.wandb.log(other_val_losses, step=epoch)
+            # self.wandb.log(other_val_accs, step=epoch)
 
             self.wandb.log(dict(tr_loss=tr_loss, val_loss=val_loss, tr_acc=tr_acc, val_acc=val_acc), step=epoch)
             if self.early_stopper1.early_stop and self.early_stopper2.early_stop:
