@@ -136,10 +136,10 @@ class SlotAddOn(nn.Module):
 
 
 class SlotEncoder(nn.Module):
-    def __init__(self,input_channels, args):
+    def __init__(self,input_channels, slot_len, num_slots, args):
         super().__init__()
-        self.slot_len = args.slot_len
-        self.num_slots = args.num_slots
+        self.slot_len = slot_len
+        self.num_slots = num_slots
         self.base_encoder = NatureCNN(input_channels, args)
         inp_shape = self.base_encoder.final_conv_shape
         self.slot_addon = SlotAddOn(inp_shape, self.num_slots, self.slot_len)

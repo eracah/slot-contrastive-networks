@@ -79,6 +79,18 @@ def get_argparser():
     return parser
 
 
+def prepend_prefix(dictionary, prefix):
+    new_dict = {}
+    for k, v in dictionary.items():
+        new_dict[prefix + k] = v
+    return new_dict
+
+def append_suffix(dictionary, suffix):
+    new_dict = {}
+    for k, v in dictionary.items():
+        new_dict[k + suffix] = v
+    return new_dict
+
 def set_seeds(seed):
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -218,6 +230,23 @@ class appendabledict(defaultdict):
          """
         for k, v in other_dict.items():
             self.__getitem__(k).append(v)
+
+    def extend_update(self, other_dict):
+        """appends current dict's values with values from other_dict
+
+        Parameters
+        ----------
+        other_dict : dict
+            A dictionary that you want to append to this dictionary
+
+
+        Returns
+        -------
+        Nothing. The side effect is this dict's values change
+
+         """
+        for k, v in other_dict.items():
+            self.__getitem__(k).extend(v)
 
 
 # Thanks Bjarten! (https://github.com/Bjarten/early-stopping-pytorch)

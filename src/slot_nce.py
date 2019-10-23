@@ -21,15 +21,17 @@ class BilinearScoreFunction(nn.Module):
 class NCETrainer(Trainer):
     def __init__(self, args, device=torch.device('cpu'), wandb=None):
         super().__init__(wandb, device)
-        self.encoder = SlotEncoder(args.obs_space[0], args).to(device)
+        self.encoder = SlotEncoder(args.obs_space[0], args.slot_len, args.num_slots, args).to(device)
         self.args = args
         self.wandb = wandb
         self.patience = self.args.patience
-        self.score_fxn = BilinearScoreFunction(self.encoder.slot_len, self.encoder.slot_len).to(device)
+        self.score_fxn_1 = BilinearScoreFunction(self.encoder.slot_len, self.encoder.slot_len).to(device)
+        self.score_fxn_2 = BilinearScoreFunction(self.encoder.slot_len, self.encoder.slot_len).to(device)
         self.epochs = args.epochs
         self.batch_size = args.batch_size
         self.device = device
-        self.optimizer = torch.optim.Adam(list(self.score_fxn.parameters()) + list(self.encoder.parameters()),
+        self.optimizer = torch.optim.Adam(list(self.score_fxn_1.parameters()) + list(self.score_fxn_2.parameters()) +\
+                                          list(self.encoder.parameters()),
                                           lr=args.lr, eps=1e-5)
         self.early_stopper1 = EarlyStopping(patience=self.patience, verbose=False, name="nce_loss1",
                                            savedir=self.wandb.run.dir + "/models")
