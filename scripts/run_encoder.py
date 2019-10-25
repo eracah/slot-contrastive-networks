@@ -1,13 +1,8 @@
-import time
-from collections import deque
-from itertools import chain
-
-import numpy as np
 import torch
-from src.utils import get_argparser
 import wandb
 import os
 from atariari.benchmark.episodes import get_episodes
+from src.utils import get_argparser, append_suffix
 
 
 def train_encoder(args):
@@ -42,6 +37,39 @@ def train_encoder(args):
 
     encoder = trainer.train(tr_eps, val_eps)
 
+    return encoder
+
+def train_supervised_encoder(args):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(device)
+    if str(device) != "cuda" and os.environ["HOME"] != '/Users/evanracah':
+        assert False, "device must be cuda!"
+    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels  = get_episodes(steps=args.num_frames,
+                                                     env_name=args.env_name,
+                                                     seed=args.seed,
+                                                     num_processes=args.num_processes,
+                                                     num_frame_stack=args.num_frame_stack,
+                                                     downsample=not args.no_downsample,
+                                                     color=args.color,
+                                                     entropy_threshold=args.entropy_threshold,
+                                                     collect_mode=args.probe_collect_mode,
+                                                     train_mode="probe",
+                                                     checkpoint_index=args.checkpoint_index,
+                                                     min_episode_length=args.batch_size)
+
+    observation_shape = tr_eps[0][0].shape
+    torch.set_num_threads(1)
+    args.obs_space = observation_shape
+    config = {}
+    config.update(vars(args))
+    args.obs_space = observation_shape
+    from src.slot_supervised import SupervisedTrainer
+    trainer = SupervisedTrainer(args, device=device, wandb=wandb)
+    encoder = trainer.train(tr_eps, tr_labels, val_eps, val_labels)
+    test_acc, test_acc_slots = trainer.test(test_eps, test_labels)
+    test_acc_slots = append_suffix(test_acc_slots, "_supervised_test_acc")
+    wandb.run.summary.update({"supervised_overall_test_acc": test_acc})
+    wandb.run.summary.update(test_acc_slots)
     return encoder
 
 

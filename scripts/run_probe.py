@@ -1,8 +1,8 @@
-from scripts.run_encoder import train_encoder
+from scripts.run_encoder import train_encoder, train_supervised_encoder
 from src.future import  SKLearnProbeTrainer, get_feature_vectors
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods, prepend_prefix, append_suffix
-from src.encoders import NatureCNN, SlotIWrapper, SlotEncoder,ConcatenateWrapper
+from src.encoders import SlotIWrapper, SlotEncoder,ConcatenateWrapper
 import wandb
 import sys
 from src.majority import majority_baseline
@@ -34,93 +34,87 @@ def run_probe(args):
 
     if args.method  == "majority":
         test_acc, test_f1score = majority_baseline(tr_labels, test_labels, wandb)
+        wandb.run.summary.update(test_acc)
+        wandb.run.summary.update(test_f1score)
 
-    elif args.method == "supervised":
-        observation_shape = tr_eps[0][0].shape
-        args.obs_space = observation_shape
-        from src.slot_supervised import SupervisedTrainer
-        trainer = SupervisedTrainer(args, device=device, wandb=wandb)
-        encoder = trainer.train(tr_eps, tr_labels, val_eps, val_labels)
-        test_acc, test_acc_slots = trainer.test(test_eps, test_labels)
-        test_acc_slots = append_suffix(test_acc_slots, "_supervised_test_acc")
-        wandb.run.summary.update({"supervised_overall_test_acc": test_acc})
-        wandb.run.summary.update(test_acc_slots)
 
     else:
-
-        if args.method in train_encoder_methods:
-            if args.train_encoder:
-                print("Training encoder from scratch")
-                encoder = train_encoder(args)
-                encoder.probing = True
-                encoder.eval()
-            else:
-                observation_shape = tr_eps[0][0].shape
-                encoder = SlotEncoder(observation_shape[0], args)
-
-                if args.weights_path == "None":
-                    if args.method not in probe_only_methods:
-                        sys.stderr.write("Probing without loading in encoder weights! Are sure you want to do that??")
-                else:
-                    print("Print loading in encoder weights from probe of type {} from the following path: {}"
-                          .format(args.method, args.weights_path))
-                    encoder.load_state_dict(torch.load(args.weights_path))
-                    encoder.eval()
-
-
+        if args.method == "supervised":
+            encoder = train_supervised_encoder(args)
 
         elif args.method == "random_cnn":
             observation_shape = tr_eps[0][0].shape
             encoder = SlotEncoder(observation_shape[0], args)
 
+        elif args.method in train_encoder_methods:
+            if args.train_encoder:
+                print("Training encoder from scratch")
+                encoder = train_encoder(args)
+                encoder.probing = True
+                encoder.eval()
+            elif args.weights_path != "None": #pretrained encoder
+                observation_shape = tr_eps[0][0].shape
+                encoder = SlotEncoder(observation_shape[0], args)
+                print("Print loading in encoder weights from probe of type {} from the following path: {}"
+                      .format(args.method, args.weights_path))
+                encoder.load_state_dict(torch.load(args.weights_path))
+                encoder.eval()
 
-
-
-
-
-
+            else:
+                assert False, "No known method specified!"
 
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
-        encoder.cpu()
-        cat_slot_enc = ConcatenateWrapper(encoder)
+        compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels)
+        f1s, accs = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
+        compute_disentangling(f1s, accs)
 
-        f_tr, y_tr = get_feature_vectors(cat_slot_enc, tr_eps, tr_labels)
-        f_test, y_test = get_feature_vectors(cat_slot_enc, test_eps, test_labels)
+
+# compute all slots
+def compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels):
+
+    encoder.cpu()
+    cat_slot_enc = ConcatenateWrapper(encoder)
+    f_tr, y_tr = get_feature_vectors(cat_slot_enc, tr_eps, tr_labels)
+    f_test, y_test = get_feature_vectors(cat_slot_enc, test_eps, test_labels)
+    trainer = SKLearnProbeTrainer(epochs=args.epochs,
+                                  lr=args.probe_lr,
+                                  patience=args.patience)
+
+    cat_test_acc, cat_test_f1 = trainer.train_test(f_tr, y_tr, f_test, y_test)
+    cat_test_acc, cat_test_f1 = postprocess_raw_metrics(cat_test_acc, cat_test_f1)
+    cat_test_acc = prepend_prefix(cat_test_acc, "all_slots_")
+    wandb.run.summary.update(cat_test_acc)
+    cat_test_f1 = append_suffix(cat_test_f1, "_all_slots")
+    wandb.run.summary.update(cat_test_f1)
+
+
+
+# compute slot-wise
+def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels):
+    accs = []
+    f1s = []
+    for i in range(encoder.num_slots):
+        slot_i_enc = SlotIWrapper(encoder,i)
+        f_tr, y_tr = get_feature_vectors(slot_i_enc, tr_eps, tr_labels)
+        f_test, y_test = get_feature_vectors(slot_i_enc, test_eps, test_labels)
         trainer = SKLearnProbeTrainer(epochs=args.epochs,
                                       lr=args.probe_lr,
                                       patience=args.patience)
 
-        cat_test_acc, cat_test_f1 = trainer.train_test(f_tr, y_tr, f_test, y_test)
-        cat_test_acc, cat_test_f1 = postprocess_raw_metrics(cat_test_acc, cat_test_f1)
-        cat_test_acc = prepend_prefix(cat_test_acc, "all_slots_")
-        wandb.run.summary.update(cat_test_acc)
-        cat_test_f1 = append_suffix(cat_test_f1, "_all_slots")
-        wandb.run.summary.update(cat_test_f1)
+        test_acc, test_f1score = trainer.train_test(f_tr, y_tr, f_test, y_test)
+
+        accs.append(deepcopy(test_acc))
+        f1s.append(deepcopy(test_f1score))
+        sloti_test_acc = append_suffix(test_acc, "_acc_slot{}".format(i+1))
+        sloti_test_f1 = append_suffix(test_f1score, "_f1_slot{}".format(i+1))
+        wandb.run.summary.update(sloti_test_acc)
+        wandb.run.summary.update(sloti_test_f1)
+    return f1s, accs
 
 
-
-        accs = []
-        f1s = []
-        for i in range(args.num_slots):
-            slot_i_enc = SlotIWrapper(encoder,i)
-            f_tr, y_tr = get_feature_vectors(slot_i_enc, tr_eps, tr_labels)
-            f_test, y_test = get_feature_vectors(slot_i_enc, test_eps, test_labels)
-            trainer = SKLearnProbeTrainer(epochs=args.epochs,
-                                          lr=args.probe_lr,
-                                          patience=args.patience)
-
-            test_acc, test_f1score = trainer.train_test(f_tr, y_tr, f_test, y_test)
-
-            accs.append(deepcopy(test_acc))
-            f1s.append(deepcopy(test_f1score))
-            sloti_test_acc = prepend_prefix(test_acc, "slot{}_".format(i+1))
-            sloti_test_f1 = append_suffix(test_f1score, "_f1_slot{}".format(i+1))
-            wandb.run.summary.update(sloti_test_acc)
-            wandb.run.summary.update(sloti_test_f1)
-
-
-
+# compute disentangling
+def compute_disentangling(f1s,accs):
     df, acc_df = pd.DataFrame(f1s), pd.DataFrame(accs)
     saps_compactness = append_suffix(compute_SAP(df), "_f1_sap_compactness")
     wandb.run.summary.update(saps_compactness)
@@ -132,12 +126,6 @@ def run_probe(args):
     f1_maxes = {k:v for k, v in f1_maxes.items() if "avg" in k}
     f1_maxes = append_suffix(f1_maxes, "_best_slot_for_each")
     wandb.run.summary.update(f1_maxes)
-
-
-
-
-
-
 
 def compute_variance(df):
     pass

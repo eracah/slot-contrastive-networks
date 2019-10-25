@@ -13,7 +13,7 @@ from pathlib import Path
 
 # methods that need encoder trained before
 train_encoder_methods = ["nce", "infonce"]
-probe_only_methods = ["supervised", "random-cnn", "majority", "pretrained-rl-agent"]
+probe_only_methods = ["supervised", "random-cnn", "majority"]
 
 
 def get_argparser():
