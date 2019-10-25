@@ -42,9 +42,9 @@ def run_probe(args):
         if args.method == "supervised":
             encoder = train_supervised_encoder(args)
 
-        elif args.method == "random_cnn":
+        elif args.method == "random-cnn":
             observation_shape = tr_eps[0][0].shape
-            encoder = SlotEncoder(observation_shape[0], args)
+            encoder = SlotEncoder(observation_shape[0], slot_len=args.slot_len, num_slots=args.num_slots, args=args)
 
         elif args.method in train_encoder_methods:
             if args.train_encoder:
@@ -54,7 +54,7 @@ def run_probe(args):
                 encoder.eval()
             elif args.weights_path != "None": #pretrained encoder
                 observation_shape = tr_eps[0][0].shape
-                encoder = SlotEncoder(observation_shape[0], args)
+                encoder = SlotEncoder(observation_shape[0], slot_len=args.slot_len, num_slots=args.num_slots, args=args)
                 print("Print loading in encoder weights from probe of type {} from the following path: {}"
                       .format(args.method, args.weights_path))
                 encoder.load_state_dict(torch.load(args.weights_path))
@@ -62,6 +62,8 @@ def run_probe(args):
 
             else:
                 assert False, "No known method specified!"
+        else:
+            assert False, "No known method specified! Don't know what {} is".format(args.method)
 
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
@@ -114,18 +116,23 @@ def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels):
 
 
 # compute disentangling
-def compute_disentangling(f1s,accs):
+def compute_disentangling(f1s, accs):
     df, acc_df = pd.DataFrame(f1s), pd.DataFrame(accs)
     saps_compactness = append_suffix(compute_SAP(df), "_f1_sap_compactness")
     wandb.run.summary.update(saps_compactness)
     avg_sap_compactness = np.mean(list(saps_compactness.values()))
     wandb.run.summary.update({"f1_avg_sap_compactness": avg_sap_compactness})
+    acc_saps_compactness = append_suffix(compute_SAP(acc_df), "_acc_sap_compactness")
+    wandb.run.summary.update(acc_saps_compactness)
+    acc_avg_sap_compactness = np.mean(list(acc_saps_compactness.values()))
+    wandb.run.summary.update({"acc_avg_sap_compactness": acc_avg_sap_compactness})
     f1_maxes = dict(df.max())
     acc_maxes = dict(acc_df.max())
     acc_maxes, f1_maxes = postprocess_raw_metrics(acc_maxes, f1_maxes)
     f1_maxes = {k:v for k, v in f1_maxes.items() if "avg" in k}
     f1_maxes = append_suffix(f1_maxes, "_best_slot_for_each")
     wandb.run.summary.update(f1_maxes)
+    wandb.run.summary.update(acc_maxes)
 
 def compute_variance(df):
     pass
