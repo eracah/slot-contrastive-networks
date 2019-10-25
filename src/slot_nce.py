@@ -167,7 +167,7 @@ class NCETrainer(Trainer):
         epoch_acc2 = np.mean(acc2s)
         epoch_acc1_slots = {k: np.mean(v) for k, v in acc1_slots.items()}
         epoch_acc2_slots = {k: np.mean(v) for k, v in acc2_slots.items()}
-        acc_terms = {mode + "_acc1": epoch_loss1, mode + "_acc2": epoch_loss2}
+        acc_terms = {mode + "_acc1": epoch_acc1, mode + "_acc2": epoch_acc2}
         other_accs = {}
         other_accs.update(epoch_acc1_slots)
         other_accs.update(epoch_acc2_slots)
