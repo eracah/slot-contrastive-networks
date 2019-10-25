@@ -61,7 +61,7 @@ class NCETrainer(Trainer):
 
 
     def do_one_epoch(self, epoch, episodes):
-        mode = "train" if self.encoder.training and self.score_fxn.training else "val"
+        mode = "train" if self.encoder.training and self.score_fxn_1.training and self.score_fxn_2.training  else "val"
         losses, loss1s, loss2s = [], [], []
         accs, acc1s, acc2s = [], [], []
         data_generator = self.generate_batch(episodes)
@@ -86,8 +86,8 @@ class NCETrainer(Trainer):
                                                    slots_neg[:,i]
 
                 # batch_size x 1
-                pos_logits = self.score_fxn(slot_t_i, slot_pos_i)
-                neg_logits = self.score_fxn(slot_t_i, slot_neg_i)
+                pos_logits = self.score_fxn_1(slot_t_i, slot_pos_i)
+                neg_logits = self.score_fxn_1(slot_t_i, slot_neg_i)
 
                 logits = torch.cat((pos_logits, neg_logits), dim=1)
 
@@ -122,8 +122,8 @@ class NCETrainer(Trainer):
                 random_other_slot_index = np.random.choice(other_slot_inds)
                 other_slot_inds.remove(i)
                 slot_t_i = slots_t[:, i]
-                pos_logit = self.score_fxn(slot_t_i, slots_pos[:, i])
-                neg_logit = self.score_fxn(slot_t_i, slots_pos[:, random_other_slot_index ])
+                pos_logit = self.score_fxn_2(slot_t_i, slots_pos[:, i])
+                neg_logit = self.score_fxn_2(slot_t_i, slots_pos[:, random_other_slot_index ])
                 logits = [pos_logit, neg_logit]
                 # correct label in this binary classification problem is always 0 b/c pos logit comes first
                 ground_truth = torch.zeros((batch_size,)).long().to(self.device)
@@ -187,7 +187,7 @@ class NCETrainer(Trainer):
     def train(self, tr_eps, val_eps):
         for epoch in range(self.epochs):
             print("Epoch {}".format(epoch))
-            self.encoder.train(), self.score_fxn.train()
+            self.encoder.train(), self.score_fxn_1.train(), self.score_fxn_2.train()
             tr_loss, other_tr_losses, tr_acc, other_tr_accs, tr_acc_terms, tr_loss_terms = self.do_one_epoch(epoch, tr_eps)
             self.wandb.log(tr_loss_terms, step=epoch)
             self.wandb.log(tr_acc_terms, step=epoch)
@@ -195,7 +195,7 @@ class NCETrainer(Trainer):
             # self.wandb.log(other_tr_accs, step=epoch)
 
 
-            self.encoder.eval(), self.score_fxn.eval()
+            self.encoder.eval(), self.score_fxn_1.eval(), self.score_fxn_2.eval()
             val_loss, other_val_losses, val_acc, other_val_accs, val_acc_terms, val_loss_terms = self.do_one_epoch(epoch, val_eps)
             self.wandb.log(val_loss_terms, step=epoch)
             self.wandb.log(val_acc_terms, step=epoch)
