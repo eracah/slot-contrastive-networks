@@ -101,8 +101,8 @@ class SKLearnProbeTrainer(object):
             # sklearn is annoying about classes that only appear once or twice
             inds = [i for i, v in enumerate(tr_labels) if 0.2 * tr_labels.count(v) >= 3]
             tr_labels = [tr_labels[ind] for ind in inds]
-            x_tr = np.stack([x_tr[ind] for ind in inds])
-            self.estimator.fit(x_tr, tr_labels )
+            x_tr = np.asarray([x_tr[ind] for ind in inds])
+            self.estimator.fit(x_tr, tr_labels)
             y_pred = self.estimator.predict(f_test)
             accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
             # if label_name == "player_x":
