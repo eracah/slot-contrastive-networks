@@ -12,7 +12,11 @@ import pandas as pd
 import numpy as np
 from copy import deepcopy
 from scipy.optimize import linear_sum_assignment as lsa
-
+from torch.utils.data import RandomSampler, BatchSampler
+from matplotlib import pyplot as plt
+from torchvision.utils import make_grid
+import numpy as np
+from torch import nn
 
 def run_probe(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -66,8 +70,10 @@ def run_probe(args):
         else:
             assert False, "No known method specified! Don't know what {} is".format(args.method)
 
+        encoder.cpu()
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
+        log_fmaps(encoder, test_eps)
         compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels)
         f1s, accs = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
         f1_df, acc_df = pd.DataFrame(f1s), pd.DataFrame(accs)
@@ -75,10 +81,46 @@ def run_probe(args):
         compute_disentangling(f1_df, acc_df)
 
 
+
+def log_fmaps(encoder, episodes):
+    batch_size = 6
+    sampler = BatchSampler(RandomSampler(range(len(episodes)),
+                                         replacement=True, num_samples=1),
+                           batch_size, drop_last=False)
+
+    for indices in sampler:
+
+        episodes_batch = [episodes[x] for x in indices]
+
+        xs = []
+        for ep_ind, episode in enumerate(episodes_batch):
+            # Get one sample from this episode
+            t = np.random.randint(len(episode))
+            xs.append(episode[t])
+        x = torch.stack(xs) / 255.
+        fmaps, slot_fmaps = encoder.get_fmaps(x)
+        fmaps = fmaps.detach().cpu().numpy()
+        # np_x = x.detach().cpu().numpy()
+        # np_slot_fmaps = slot_fmaps.detach().cpu().numpy().squeeze()
+        #wandb.log({"fmaps": [wandb.Image(fmaps, caption="fmaps")]})
+        slot_fmaps = slot_fmaps.detach()
+        fm_upsample = nn.functional.interpolate(slot_fmaps, size=x.shape[-2:], mode="bilinear")
+        fmu = torch.transpose(fm_upsample, 1, 0)
+        fm_grid = make_grid(fmu, nrow=8, padding=0)[0].detach().numpy()
+        xgrid = (x[0, 0].repeat(1, 1, 8).numpy().transpose(1, 2, 0) + 1) / 2
+        xgrid = xgrid.squeeze()
+        fig = plt.figure(1, frameon=False, figsize=(50, 50))
+        im1 = plt.imshow(xgrid)
+        im2 = plt.imshow(fm_grid, cmap=plt.cm.jet, alpha=0.7)
+        plt.axis("off")
+        wandb.log({"chart": plt})
+        #wandb.log({"slot_fmaps": [wandb.Image(slot_fmap, mode="P", caption="slot_fmaps") for slot_fmap in slot_fmaps]})
+        #wandb.log({"input": [wandb.Image(x, caption="input")]})
+
 # compute all slots
 def compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels):
 
-    encoder.cpu()
+
     cat_slot_enc = ConcatenateWrapper(encoder)
     f_tr, y_tr = get_feature_vectors(cat_slot_enc, tr_eps, tr_labels)
     f_test, y_test = get_feature_vectors(cat_slot_enc, test_eps, test_labels)

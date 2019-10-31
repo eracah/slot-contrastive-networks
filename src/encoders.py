@@ -121,6 +121,11 @@ class SlotAddOn(nn.Module):
                                      nn.ReLU(),
                                      nn.Linear(slot_len, slot_len) )
 
+    def get_fmaps(self, inp):
+        slot_fmaps = self.slot_conv(inp)
+        return slot_fmaps
+
+
     def forward(self,inp):
         slot_fmaps = self.slot_conv(inp)
         slots = []
@@ -143,6 +148,12 @@ class SlotEncoder(nn.Module):
         self.base_encoder = NatureCNN(input_channels, args)
         inp_shape = self.base_encoder.final_conv_shape
         self.slot_addon = SlotAddOn(inp_shape, self.num_slots, self.slot_len)
+
+
+    def get_fmaps(self, x):
+        fmaps = self.base_encoder(x)
+        slot_fmaps = self.slot_addon.get_fmaps(fmaps)
+        return fmaps, slot_fmaps
 
     def forward(self, x):
         fmaps = self.base_encoder(x)
