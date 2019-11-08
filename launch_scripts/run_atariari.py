@@ -26,5 +26,7 @@ for i,env in enumerate(envs):
 
     sargs.append(name + suffix)
 
+    sargs.extend(["--wandb_proj", "coors-production"])
+
     print(" ".join(sargs))
     subprocess.run(sargs)
