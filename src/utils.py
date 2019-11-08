@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 # methods that need encoder trained before
-train_encoder_methods = ["nce", "infonce"]
+train_encoder_methods = ["nce", "infonce","shared_score_fxn"]
 probe_only_methods = ["supervised", "random-cnn", "majority"]
 
 
