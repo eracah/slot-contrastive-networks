@@ -31,6 +31,15 @@ def train_encoder(args):
     if args.method == "nce":
         from src.slot_nce import NCETrainer
         trainer = NCETrainer(args, device=device, wandb=wandb)
+    elif args.method == "shared_score_fxn":
+        from src.shared_score_fxn import SharedScoreFxnTrainer
+        trainer = SharedScoreFxnTrainer(args, device=device, wandb=wandb)
+
+    elif args.method == "infonce":
+        from src.infonce import InfoNCETrainer
+        trainer = InfoNCETrainer(args, device=device, wandb=wandb)
+
+
 
     else:
         assert False, "method {} has no trainer".format(args.method)
