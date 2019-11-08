@@ -91,9 +91,10 @@ class SKLearnProbeTrainer(object):
 
 
     def train_test(self, f_tr, y_tr, f_test,y_test):
+        print("train-test started!")
         acc_dict, f1_dict = {}, {}
         for label_name in y_tr.keys():
-            print(label_name)
+            #print(label_name)
             tr_labels = y_tr[label_name]
             test_labels = y_test[label_name]
             x_tr = deepcopy(f_tr)
@@ -109,7 +110,7 @@ class SKLearnProbeTrainer(object):
             #     print("hey")
             warnings.filterwarnings('ignore')
             f1score = compute_f1_score(test_labels, y_pred,  average="weighted")
-            print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
+            #print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
             acc_dict[label_name] = accuracy
             f1_dict[label_name] = f1score
 
