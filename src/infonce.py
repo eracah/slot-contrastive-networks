@@ -35,9 +35,9 @@ class InfoNCETrainer(Trainer):
         self.optimizer = torch.optim.Adam(list(self.score_matrix_1.parameters()) + list(self.score_fxn_2.parameters()) +\
                                           list(self.encoder.parameters()),
                                           lr=args.lr, eps=1e-5)
-        self.early_stopper1 = EarlyStopping(patience=self.patience, verbose=False, name="nce_loss1",
+        self.early_stopper1 = EarlyStopping(patience=self.patience, verbose=False, name="infonce_loss1",
                                            savedir=self.wandb.run.dir + "/models")
-        self.early_stopper2 = EarlyStopping(patience=self.patience, verbose=False, name="nce_loss2",
+        self.early_stopper2 = EarlyStopping(patience=self.patience, verbose=False, name="infonce_loss2",
                                            savedir=self.wandb.run.dir + "/models")
 
     def generate_batch(self, episodes):
@@ -81,19 +81,20 @@ class InfoNCETrainer(Trainer):
                        come from consecutive (or within a small window) time steps or not?"""
             loss1is = []
             t10 = time.time()
+            # for each slot
             for i in range(self.encoder.num_slots):
                 # batch_size, slot_len
-                slot_t_i, slot_pos_i, slot_neg_i = slots_t[:,i],\
-                                                   slots_pos[:,i],\
-                                                   slots_neg[:,i]
+                slot_t_i, slot_pos_i, slot_neg_i = slots_t[:, i],\
+                                                   slots_pos[:, i],\
+                                                   slots_neg[:, i]
 
-                slot_logits = self.score_matrix_1(slot_t_i) #transforms each slot into some interemdiater representation thew same len as the slots
+                slot_t_i_transformed = self.score_matrix_1(slot_t_i) #transforms each slot into some interemdiate representation the same len as the slots
 
-                # dot product of each slot aT time in batch with every slot at time t+1 in the batch
-                # result is batch_size x batch_size matrix
-                # diagonal of the matrix is vector of the dot product of each slot vector with the same slot vector in the same episode at one time step in the future
+                # dot product of each slot at time t in batch with every slot at time t+1 in the batch
+                # result is batch_size x batch_size matrix (for every slot_i in batch for every slot_pos_i vector batch what is dot product)
+                # each element of the diagonal of the matrix the dot product of a slot vector with the same slot vector in the same episode at one time step in the future
                 # so each element of the diagonal is a positive logit and off-diagonals are negative logits
-                logits = torch.matmul(slot_logits, slot_pos_i)
+                logits = torch.matmul(slot_t_i_transformed, slot_pos_i)
 
                 # thus we do multi-class classifcation where the label for each row is equal to the index of the row
                 # ground truth for row 0 is 0, row 1 is 1, etc.
@@ -113,23 +114,36 @@ class InfoNCETrainer(Trainer):
             # print("\t loss1 iter time {} ".format(time.time() - t10))
             #self.wandb.log({"loss1": loss1}, step=iteration)
 
-            # TODO slot loss infonce
             """Loss 2:  Does a pair of vectors close in time come from the 
                         same slot of different slots"""
             loss2is = []
             t20 = time.time()
             for i in range(self.encoder.num_slots):
-                batch_size = slot_t_i.shape[0]
-                other_slot_inds = list(range(self.encoder.num_slots))
-                random_other_slot_index = np.random.choice(other_slot_inds)
-                other_slot_inds.remove(i)
-                slot_t_i = slots_t[:, i]
-                pos_logit = self.score_fxn_2(slot_t_i, slots_pos[:, i])
-                neg_logit = self.score_fxn_2(slot_t_i, slots_pos[:, random_other_slot_index ])
-                logits = [pos_logit, neg_logit]
-                # correct label in this binary classification problem is always 0 b/c pos logit comes first
-                ground_truth = torch.zeros((batch_size,)).long().to(self.device)
-                logits = torch.cat(logits, dim=1)
+                slot_t_i  = slots_t[:, i]
+                slot_t_i_transformed = self.score_matrix_2(slot_t_i)  # transforms each slot into some interemdiate representation the same len as the slots
+
+                # this results in a batch_size x batch_size x num_slots matrix
+                # which is the dot product of every ith_slot vector at time t in the batch with every set of slots at time t+1 in the batch
+                # so scores[j,k,l] is the jth slot_t_i vector in the batch multiplied by the lth slot in the kth set of slots in the batch of t+1 slots
+                scores = torch.matmul(slots_pos, slot_t_i_transformed.T).transpose(2,1)
+
+                # each element of the diagonal of this matrix is the dot product of a slot vector with the same slot vector in the same episode at one time step in the future
+                # we onlhy want slot_i's from same episode to be paired
+                pos_logits = scores[:, :, i].diag()
+
+                # mask out the ith slot for the neg_logits (we only want mismatched slots to be paired together for neg logits)
+                mask = torch.arange(self.encoder.num_slots) != i
+                neg_logits = scores[:, :, mask]
+                neg_logits = neg_logits.reshape(self.batch_size, -1)
+
+                # now we concatenate pos_logits column with negative logits matrix to create
+                # bactch_size x set of logits matrix
+                # the shape will be batch_size x 1 + batch_size * (num_slots - 1)
+                logits = torch.cat((pos_logits[:, None], neg_logits), dim=1)
+
+                #ground truth index is always 0 for every logit vector in batch
+                # because we put the column of positive logits on the left
+                ground_truth = torch.zeros(self.batch_size).long().to(self.device)
                 loss2i = nn.CrossEntropyLoss()(logits, ground_truth)
                 _, acc2i = calculate_accuracy(logits.detach().cpu().numpy(), ground_truth.detach().cpu().numpy())
                 loss2_slots["loss2_slot_{}".format(i)].append(loss2i.detach().cpu().numpy())
