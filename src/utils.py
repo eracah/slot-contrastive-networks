@@ -121,6 +121,15 @@ def calculate_multiclass_accuracy(preds, labels):
     return acc
 
 
+def append_suffix(dictionary, suffix):
+    new_dict = {}
+    for k, v in dictionary.items():
+        new_dict[k + suffix] = v
+    return new_dict
+
+def compute_dict_average(metric_dict):
+    return np.mean(list(metric_dict.values()))
+
 def save_model(model, envs, save_dir, model_name, use_cuda):
     save_path = os.path.join(save_dir)
     try:

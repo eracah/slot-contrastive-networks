@@ -1,12 +1,11 @@
 import torch
-from atariari.benchmark.utils import appendabledict
+from src.utils import appendabledict, compute_dict_average, append_suffix
 from copy import deepcopy
 import numpy as np
 from sklearn.linear_model import SGDClassifier
-from sklearn.base import clone
-from atariari.benchmark.probe import postprocess_raw_metrics
 from sklearn.metrics import f1_score as compute_f1_score
 import warnings
+from atariari.benchmark.categorization import summary_key_dict
 
 """Usage:
  tr_eps.extend(val_eps)
@@ -92,7 +91,8 @@ class SKLearnProbeTrainer(object):
 
     def train_test(self, f_tr, y_tr, f_test,y_test):
         print("train-test started!")
-        acc_dict, f1_dict = {}, {}
+        f1_dict = {}
+        weights_dict = {}
         for label_name in y_tr.keys():
             #print(label_name)
             tr_labels = y_tr[label_name]
@@ -105,18 +105,40 @@ class SKLearnProbeTrainer(object):
             x_tr = np.asarray([x_tr[ind] for ind in inds])
             self.estimator.fit(x_tr, tr_labels)
             y_pred = self.estimator.predict(f_test)
-            accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
-            # if label_name == "player_x":
-            #     print("hey")
+            #accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
             warnings.filterwarnings('ignore')
             f1score = compute_f1_score(test_labels, y_pred,  average="weighted")
-            #print("\t Acc: {}\n\t f1: {}".format(accuracy, f1score))
-            acc_dict[label_name] = accuracy
             f1_dict[label_name] = f1score
-
+            weights_dict[label_name] = deepcopy(self.estimator.coef_)
             # reset estimator
             self.reset_estimator()
 
         #acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
 
-        return acc_dict, f1_dict
+
+        return f1_dict, weights_dict
+
+
+
+def compute_category_avgs(metric_dict):
+    category_dict = {}
+    for category_name, category_keys in summary_key_dict.items():
+        category_values = [v for k, v in metric_dict.items() if k in category_keys]
+        if len(category_values) < 1:
+            continue
+        category_mean = np.mean(category_values)
+        category_dict[category_name + "_avg"] = category_mean
+    return category_dict
+
+
+def postprocess_raw_metrics(metric_dict):
+    overall_avg = compute_dict_average(metric_dict)
+    category_avgs_dict = compute_category_avgs(metric_dict)
+    avg_across_categories = compute_dict_average(category_avgs_dict)
+    metric_dict.update(category_avgs_dict)
+
+    metric_dict["overall_avg"] = overall_avg
+    metric_dict["across_categories_avg"] = avg_across_categories
+
+    return metric_dict
+

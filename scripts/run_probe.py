@@ -1,23 +1,16 @@
 from scripts.run_encoder import train_encoder, train_supervised_encoder
-from src.future import  SKLearnProbeTrainer, get_feature_vectors
+from src.future import SKLearnProbeTrainer, get_feature_vectors, postprocess_raw_metrics
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods, prepend_prefix, append_suffix
 from src.encoders import SlotIWrapper, SlotEncoder,ConcatenateWrapper
 import wandb
-import sys
 from src.majority import majority_baseline
 from atariari.benchmark.episodes import get_episodes
-from atariari.benchmark.probe import postprocess_raw_metrics
 import pandas as pd
-import numpy as np
 from copy import deepcopy
 from scipy.optimize import linear_sum_assignment as lsa
-from torch.utils.data import RandomSampler, BatchSampler
-from matplotlib import pyplot as plt
-from torchvision.utils import make_grid
 import numpy as np
-from torch import nn
-import PIL
+
 
 def run_probe(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -75,11 +68,11 @@ def run_probe(args):
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
         #log_fmaps(encoder, test_eps)
-        f1s, accs = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
-        f1_df, acc_df = pd.DataFrame(f1s), pd.DataFrame(accs)
-        compute_assigned_slot_metrics(f1_df, acc_df)
-        compute_disentangling(f1_df, acc_df)
-        compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels)
+        f1s = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
+        f1_df = pd.DataFrame(f1s)
+        compute_assigned_slot_metrics(f1_df)
+        compute_disentangling(f1_df)
+        compute_all_slots_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
 
 
 #
@@ -128,18 +121,16 @@ def compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels):
                                   lr=args.probe_lr,
                                   patience=args.patience)
 
-    cat_test_acc, cat_test_f1 = trainer.train_test(f_tr, y_tr, f_test, y_test)
-    cat_test_acc, cat_test_f1 = postprocess_raw_metrics(cat_test_acc, cat_test_f1)
-    cat_test_acc = append_suffix(cat_test_acc, "_all_slots")
-    #wandb.run.summary.update(cat_test_acc)
-    cat_test_f1 = append_suffix(cat_test_f1, "_all_slots")
+    cat_test_f1, weights = trainer.train_test(f_tr, y_tr, f_test, y_test)
+    cat_test_f1 = postprocess_raw_metrics(cat_test_f1)
+    cat_test_f1 = append_suffix(cat_test_f1, "_f1_all_slots")
     wandb.run.summary.update(cat_test_f1)
+    return
 
 
 
 # compute slot-wise
 def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels):
-    accs = []
     f1s = []
     for i in range(encoder.num_slots):
         slot_i_enc = SlotIWrapper(encoder,i)
@@ -149,55 +140,38 @@ def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels):
                                       lr=args.probe_lr,
                                       patience=args.patience)
 
-        test_acc, test_f1score = trainer.train_test(f_tr, y_tr, f_test, y_test)
+        test_f1score, weights = trainer.train_test(f_tr, y_tr, f_test, y_test)
 
-        accs.append(deepcopy(test_acc))
         f1s.append(deepcopy(test_f1score))
-        sloti_test_acc = append_suffix(test_acc, "_acc_slot{}".format(i+1))
         sloti_test_f1 = append_suffix(test_f1score, "_f1_slot{}".format(i+1))
-        #wandb.run.summary.update(sloti_test_acc)
         wandb.run.summary.update(sloti_test_f1)
-    return f1s, accs
+    return f1s
 
 
-def compute_assigned_slot_metrics(f1_df,acc_df):
+def compute_assigned_slot_metrics(f1_df):
     f1_np = f1_df.to_numpy()
     row_ind, col_ind = lsa(-f1_np)
     inds = list(zip(row_ind, col_ind))
     assigned_slot_f1s = {f1_df.columns[factor_num]: f1_np[slot_num, factor_num] for
                       (slot_num, factor_num) in inds}
 
-    acc_np = acc_df.to_numpy()
-    row_ind, col_ind = lsa(-acc_np)
-    inds = list(zip(row_ind, col_ind))
-    assigned_slot_accs = {acc_df.columns[factor_num]: f1_np[slot_num, factor_num] for
-                      (slot_num, factor_num) in inds}
-
-    assigned_slot_accs, assigned_slot_f1s = postprocess_raw_metrics(assigned_slot_accs, assigned_slot_f1s)
-    assigned_slot_accs = append_suffix(assigned_slot_accs,"_assigned_slot_acc")
-    assigned_slot_f1s = append_suffix(assigned_slot_f1s,"_assigned_slot_f1")
-    #wandb.run.summary.update(assigned_slot_accs)
+    assigned_slot_f1s = postprocess_raw_metrics(assigned_slot_f1s)
+    assigned_slot_f1s = append_suffix(assigned_slot_f1s,"_f1_assigned_slot")
     wandb.run.summary.update(assigned_slot_f1s)
 
 
 
 # compute disentangling
-def compute_disentangling(df, acc_df):
+def compute_disentangling(df):
     saps_compactness = append_suffix(compute_SAP(df), "_f1_sap_compactness")
     wandb.run.summary.update(saps_compactness)
     avg_sap_compactness = np.mean(list(saps_compactness.values()))
-    wandb.run.summary.update({"f1_avg_sap_compactness": avg_sap_compactness})
-    acc_saps_compactness = append_suffix(compute_SAP(acc_df), "_acc_sap_compactness")
-    #wandb.run.summary.update(acc_saps_compactness)
-    acc_avg_sap_compactness = np.mean(list(acc_saps_compactness.values()))
-    #wandb.run.summary.update({"acc_avg_sap_compactness": acc_avg_sap_compactness})
+    wandb.run.summary.update({"avg_f1_sap_compactness": avg_sap_compactness})
     f1_maxes = dict(df.max())
-    acc_maxes = dict(acc_df.max())
-    acc_maxes, f1_maxes = postprocess_raw_metrics(acc_maxes, f1_maxes)
+    f1_maxes = postprocess_raw_metrics(f1_maxes)
     f1_maxes = {k:v for k, v in f1_maxes.items() if "avg" in k}
-    f1_maxes = append_suffix(f1_maxes, "_best_slot_for_each")
+    f1_maxes = append_suffix(f1_maxes, "_f1_best_slot_for_each")
     wandb.run.summary.update(f1_maxes)
-    #wandb.run.summary.update(acc_maxes)
 
 def compute_variance(df):
     pass
