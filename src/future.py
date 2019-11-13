@@ -109,7 +109,8 @@ class SKLearnProbeTrainer(object):
             warnings.filterwarnings('ignore')
             f1score = compute_f1_score(test_labels, y_pred,  average="weighted")
             f1_dict[label_name] = f1score
-            weights_dict[label_name] = deepcopy(self.estimator.coef_)
+            weights = self.estimator.coef_.T
+            weights_dict[label_name] = deepcopy(weights)
             # reset estimator
             self.reset_estimator()
 
