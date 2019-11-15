@@ -24,4 +24,4 @@ echo $module_name
 python -m $module_name  $@ --run-dir $SLURM_TMPDIR
 
 # 4. Copy whatever you want to save on $SCRATCH
-cp $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
+cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
