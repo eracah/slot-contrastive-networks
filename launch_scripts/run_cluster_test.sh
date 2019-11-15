@@ -1,0 +1,1 @@
+bash launch_scripts/mila_cluster.sl scripts.run_probe --probe-collect-mode random_agent --probe-num-frames 2000 --num-frames 4000 --loss1-coeff 8 --patience 1 --run-dir ./dood --slot-len 64 --env-name MsPacmanNoFrameskip-v4 --method $1
