@@ -94,7 +94,7 @@ class InfoNCETrainer(Trainer):
                 # result is batch_size x batch_size matrix (for every slot_i in batch for every slot_pos_i vector batch what is dot product)
                 # each element of the diagonal of the matrix the dot product of a slot vector with the same slot vector in the same episode at one time step in the future
                 # so each element of the diagonal is a positive logit and off-diagonals are negative logits
-                logits = torch.matmul(slot_t_i_transformed, slot_pos_i)
+                logits = torch.matmul(slot_t_i_transformed, slot_pos_i.T)
 
                 # thus we do multi-class classifcation where the label for each row is equal to the index of the row
                 # ground truth for row 0 is 0, row 1 is 1, etc.
