@@ -18,21 +18,18 @@ class BilinearScoreFunction(nn.Module):
         return self.network(x1, x2)
 
 
-class InfoNCETrainer(Trainer):
+class Loss1OnlyTrainer(Trainer):
     def __init__(self, args, device=torch.device('cpu'), wandb=None):
         super().__init__(wandb, device)
         self.encoder = SlotEncoder(args.obs_space[0], args.slot_len, args.num_slots, args).to(device)
         self.args = args
         self.wandb = wandb
         self.patience = self.args.patience
-        #self.score_matrix_1 = BilinearScoreFunction(self.encoder.slot_len, self.encoder.slot_len).to(device)
         self.score_matrix_1 = nn.Linear(self.encoder.slot_len, self.encoder.slot_len).to(device)
-        self.score_matrix_2 = nn.Linear(self.encoder.slot_len, self.encoder.slot_len).to(device)
-        #self.score_matrix_2 = BilinearScoreFunction(self.encoder.slot_len, self.encoder.slot_len).to(device)
         self.epochs = args.epochs
         self.batch_size = args.batch_size
         self.device = device
-        self.optimizer = torch.optim.Adam(list(self.score_matrix_1.parameters()) + list(self.score_matrix_2.parameters()) +\
+        self.optimizer = torch.optim.Adam(list(self.score_matrix_1.parameters()) +\
                                           list(self.encoder.parameters()),
                                           lr=args.lr, eps=1e-5)
         self.early_stopper1 = EarlyStopping(patience=self.patience, verbose=False, name="infonce_loss1",
@@ -63,15 +60,15 @@ class InfoNCETrainer(Trainer):
 
 
     def do_one_epoch(self, epoch, episodes):
-        mode = "train" if self.encoder.training and self.score_matrix_1.training and self.score_matrix_2.training  else "val"
+        mode = "train" if self.encoder.training and self.score_matrix_1.training else "val"
         losses, loss1s, loss2s = [], [], []
         accs, acc1s, acc2s = [], [], []
         data_generator = self.generate_batch(episodes)
         t0 = time.time()
         loss1_slots = {"loss1_slot_{}".format(slot_num): [] for slot_num in range(self.encoder.num_slots)}
-        loss2_slots = {"loss2_slot_{}".format(slot_num): [] for slot_num in range(self.encoder.num_slots)}
+        #loss2_slots = {"loss2_slot_{}".format(slot_num): [] for slot_num in range(self.encoder.num_slots)}
         acc1_slots = {"acc1_slot_{}".format(slot_num): [] for slot_num in range(self.encoder.num_slots)}
-        acc2_slots = {"acc2_slot_{}".format(slot_num): [] for slot_num in range(self.encoder.num_slots)}
+        #acc2_slots = {"acc2_slot_{}".format(slot_num): [] for slot_num in range(self.encoder.num_slots)}
         for iteration, (x, x_pos, x_neg) in enumerate(data_generator):
             slots_t, slots_pos, slots_neg = self.encoder(x),\
                                             self.encoder(x_pos),\
@@ -113,51 +110,51 @@ class InfoNCETrainer(Trainer):
             # self.log_results(iteration, loss1, type_="iteration", prefix=mode)
             # print("\t loss1 iter time {} ".format(time.time() - t10))
             #self.wandb.log({"loss1": loss1}, step=iteration)
+            #
+            # """Loss 2:  Does a pair of vectors close in time come from the
+            #             same slot of different slots"""
+            # loss2is = []
+            # t20 = time.time()
+            # for i in range(self.encoder.num_slots):
+            #     slot_t_i  = slots_t[:, i]
+            #     slot_t_i_transformed = self.score_matrix_2(slot_t_i)  # transforms each slot into some interemdiate representation the same len as the slots
+            #
+            #     # this results in a batch_size x batch_size x num_slots matrix
+            #     # which is the dot product of every ith_slot vector at time t in the batch with every set of slots at time t+1 in the batch
+            #     # so scores[j,k,l] is the jth slot_t_i vector in the batch multiplied by the lth slot in the kth set of slots in the batch of t+1 slots
+            #     scores = torch.matmul(slots_pos, slot_t_i_transformed.T).transpose(2,1)
+            #
+            #     # each element of the diagonal of this matrix is the dot product of a slot vector with the same slot vector in the same episode at one time step in the future
+            #     # we onlhy want slot_i's from same episode to be paired
+            #     pos_logits = scores[:, :, i].diag()
+            #
+            #     # mask out the ith slot for the neg_logits (we only want mismatched slots to be paired together for neg logits)
+            #     mask = torch.arange(self.encoder.num_slots) != i
+            #     neg_logits = scores[:, :, mask]
+            #     neg_logits = neg_logits.reshape(self.batch_size, -1)
+            #
+            #     # now we concatenate pos_logits column with negative logits matrix to create
+            #     # bactch_size x set of logits matrix
+            #     # the shape will be batch_size x 1 + batch_size * (num_slots - 1)
+            #     logits = torch.cat((pos_logits[:, None], neg_logits), dim=1)
+            #
+            #     #ground truth index is always 0 for every logit vector in batch
+            #     # because we put the column of positive logits on the left
+            #     ground_truth = torch.zeros(self.batch_size).long().to(self.device)
+            #     loss2i = nn.CrossEntropyLoss()(logits, ground_truth)
+            #     _, acc2i = calculate_accuracy(logits.detach().cpu().numpy(), ground_truth.detach().cpu().numpy())
+            #     loss2_slots["loss2_slot_{}".format(i)].append(loss2i.detach().cpu().numpy())
+            #     acc2_slots["acc2_slot_{}".format(i)].append(acc2i)
+            #     acc2s.extend(acc2i)
+            #     accs.extend(acc2i)
+            #     loss2is.append(loss2i)
 
-            """Loss 2:  Does a pair of vectors close in time come from the 
-                        same slot of different slots"""
-            loss2is = []
-            t20 = time.time()
-            for i in range(self.encoder.num_slots):
-                slot_t_i  = slots_t[:, i]
-                slot_t_i_transformed = self.score_matrix_2(slot_t_i)  # transforms each slot into some interemdiate representation the same len as the slots
+            #
+            #
+            # loss2 = torch.mean(torch.stack(loss2is))
+            # loss2s.append(loss2.detach().cpu().numpy())
 
-                # this results in a batch_size x batch_size x num_slots matrix
-                # which is the dot product of every ith_slot vector at time t in the batch with every set of slots at time t+1 in the batch
-                # so scores[j,k,l] is the jth slot_t_i vector in the batch multiplied by the lth slot in the kth set of slots in the batch of t+1 slots
-                scores = torch.matmul(slots_pos, slot_t_i_transformed.T).transpose(2,1)
-
-                # each element of the diagonal of this matrix is the dot product of a slot vector with the same slot vector in the same episode at one time step in the future
-                # we onlhy want slot_i's from same episode to be paired
-                pos_logits = scores[:, :, i].diag()
-
-                # mask out the ith slot for the neg_logits (we only want mismatched slots to be paired together for neg logits)
-                mask = torch.arange(self.encoder.num_slots) != i
-                neg_logits = scores[:, :, mask]
-                neg_logits = neg_logits.reshape(self.batch_size, -1)
-
-                # now we concatenate pos_logits column with negative logits matrix to create
-                # bactch_size x set of logits matrix
-                # the shape will be batch_size x 1 + batch_size * (num_slots - 1)
-                logits = torch.cat((pos_logits[:, None], neg_logits), dim=1)
-
-                #ground truth index is always 0 for every logit vector in batch
-                # because we put the column of positive logits on the left
-                ground_truth = torch.zeros(self.batch_size).long().to(self.device)
-                loss2i = nn.CrossEntropyLoss()(logits, ground_truth)
-                _, acc2i = calculate_accuracy(logits.detach().cpu().numpy(), ground_truth.detach().cpu().numpy())
-                loss2_slots["loss2_slot_{}".format(i)].append(loss2i.detach().cpu().numpy())
-                acc2_slots["acc2_slot_{}".format(i)].append(acc2i)
-                acc2s.extend(acc2i)
-                accs.extend(acc2i)
-                loss2is.append(loss2i)
-
-
-
-            loss2 = torch.mean(torch.stack(loss2is))
-            loss2s.append(loss2.detach().cpu().numpy())
-
-            loss = self.args.loss1_coeff * loss1 + loss2
+            loss = self.args.loss1_coeff * loss1  #+ loss2
             losses.append(loss.detach().cpu().numpy())
 
             self.optimizer.zero_grad()
@@ -169,41 +166,41 @@ class InfoNCETrainer(Trainer):
         
         epoch_loss = np.mean(losses)
         epoch_loss1 = np.mean(loss1s)
-        epoch_loss2 = np.mean(loss2s)
+        #epoch_loss2 = np.mean(loss2s)
         epoch_loss1_slots = {k: np.mean(v) for k, v in loss1_slots.items()}
-        epoch_loss2_slots = {k: np.mean(v) for k, v in loss2_slots.items()}
-        loss_terms = {mode + "_loss1":epoch_loss1, mode + "_loss2":epoch_loss2}
+        #epoch_loss2_slots = {k: np.mean(v) for k, v in loss2_slots.items()}
+        loss_terms = {mode + "_loss1":epoch_loss1} #, mode + "_loss2":epoch_loss2}
         other_losses = {}
         other_losses.update(epoch_loss1_slots)
-        other_losses.update(epoch_loss2_slots)
+        #other_losses.update(epoch_loss2_slots)
         other_losses = {mode + "_" + k: v for k,v in other_losses.items()}
 
         epoch_acc = np.mean(accs)
         epoch_acc1 = np.mean(acc1s)
-        epoch_acc2 = np.mean(acc2s)
+        #epoch_acc2 = np.mean(acc2s)
         epoch_acc1_slots = {k: np.mean(v) for k, v in acc1_slots.items()}
-        epoch_acc2_slots = {k: np.mean(v) for k, v in acc2_slots.items()}
-        acc_terms = {mode + "_acc1": epoch_acc1, mode + "_acc2": epoch_acc2}
+       # epoch_acc2_slots = {k: np.mean(v) for k, v in acc2_slots.items()}
+        acc_terms = {mode + "_acc1": epoch_acc1} #, mode + "_acc2": epoch_acc2}
         other_accs = {}
         other_accs.update(epoch_acc1_slots)
-        other_accs.update(epoch_acc2_slots)
+        #other_accs.update(epoch_acc2_slots)
         other_accs = {mode + "_" + k: v for k, v in other_accs.items()}
 
 
 
-        self.log_results(epoch_loss, epoch_loss1, epoch_loss2, epoch_acc, epoch_acc1, epoch_acc2, mode=mode)
+        self.log_results(epoch_loss, epoch_loss1, epoch_acc, epoch_acc1, mode=mode)
         print("\t\tnum iterations: {}".format(iteration + 1))
         print("\t\tepoch time: {}".format(time.time() - t0))
         if mode == "val":
             self.early_stopper1(-epoch_loss1, self.encoder)
-            self.early_stopper2(-epoch_loss2, self.encoder)
+            #self.early_stopper2(-epoch_loss2, self.encoder)
 
         return epoch_loss, other_losses, epoch_acc, other_accs, acc_terms, loss_terms
 
     def train(self, tr_eps, val_eps):
         for epoch in range(self.epochs):
             print("Epoch {}".format(epoch))
-            self.encoder.train(), self.score_matrix_1.train(), self.score_matrix_2.train()
+            self.encoder.train(), self.score_matrix_1.train()
             tr_loss, other_tr_losses, tr_acc, other_tr_accs, tr_acc_terms, tr_loss_terms = self.do_one_epoch(epoch, tr_eps)
             self.wandb.log(tr_loss_terms, step=epoch)
             self.wandb.log(tr_acc_terms, step=epoch)
@@ -211,7 +208,7 @@ class InfoNCETrainer(Trainer):
             # self.wandb.log(other_tr_accs, step=epoch)
 
 
-            self.encoder.eval(), self.score_matrix_1.eval(), self.score_matrix_2.eval()
+            self.encoder.eval(), self.score_matrix_1.eval()
             val_loss, other_val_losses, val_acc, other_val_accs, val_acc_terms, val_loss_terms = self.do_one_epoch(epoch, val_eps)
             self.wandb.log(val_loss_terms, step=epoch)
             self.wandb.log(val_acc_terms, step=epoch)
@@ -224,14 +221,14 @@ class InfoNCETrainer(Trainer):
         #torch.save(self.encoder.state_dict(), os.path.join(self.wandb.run.dir, self.args.env_name + '.pt'))
         return self.encoder
 
-    def log_results(self, loss, loss1, loss2, acc, acc1, acc2, mode=""):
+    def log_results(self, loss, loss1, acc, acc1, mode=""):
         print("\t{}: ".format(mode))
         print("\t\tLoss: {0:.4f}".format(loss))
         print("\t\t\tLoss1: {0:.4f}".format(loss1))
-        print("\t\t\tLoss2: {0:.4f}".format(loss2))
+        # print("\t\t\tLoss2: {0:.4f}".format(loss2))
         print("\t\tAcc: {0:.2f}%".format(100*acc))
         print("\t\t\tAcc1: {0:.2f}%".format(100 * acc1))
-        print("\t\t\tAcc2: {0:.2f}%".format(100 * acc2))
+        # print("\t\t\tAcc2: {0:.2f}%".format(100 * acc2))
 
 
         #self.wandb.log({prefix + '_loss': epoch_loss}, step=epoch_idx)

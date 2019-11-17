@@ -39,6 +39,11 @@ def train_encoder(args):
         from src.infonce import InfoNCETrainer
         trainer = InfoNCETrainer(args, device=device, wandb=wandb)
 
+    elif args.method == "loss1_only":
+        from src.loss1_only import Loss1OnlyTrainer
+        trainer = Loss1OnlyTrainer(args, device=device, wandb=wandb)
+
+
 
 
     else:
