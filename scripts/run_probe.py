@@ -11,6 +11,7 @@ from copy import deepcopy
 from scipy.optimize import linear_sum_assignment as lsa
 import numpy as np
 from scipy.stats import entropy
+from torch import nn
 
 def run_probe(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -67,14 +68,47 @@ def run_probe(args):
         encoder.cpu()
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
-        weights = compute_all_slots_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
-        compute_dci(encoder, weights)
-        #log_fmaps(encoder, test_eps)
+        log_fmaps(encoder, test_eps)
         f1s = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
         f1_df = pd.DataFrame(f1s)
         compute_assigned_slot_metrics(f1_df)
         compute_disentangling(f1_df)
+        weights = compute_all_slots_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
+        compute_dci(encoder, weights)
 
+
+def log_fmaps(encoder, episodes):
+    from torchvision.utils import make_grid
+    import matplotlib.pyplot as plt
+    batch_size = 8
+    indices = np.random.randint(len(episodes), size=(batch_size,))
+
+
+
+    episodes_batch = [episodes[i] for i in indices]
+
+    xs = []
+    for ep_ind, episode in enumerate(episodes_batch):
+        # Get one sample from this episode
+        t = np.random.randint(len(episode))
+        xs.append(episode[t])
+
+    xs = torch.stack(xs) / 255.
+    fmaps, slot_fmaps = encoder.get_fmaps(xs)
+    slot_fmaps = slot_fmaps.detach()
+    fm_upsample = nn.functional.interpolate(slot_fmaps, size=xs.shape[-2:], mode="bilinear")
+    fms = fm_upsample.shape
+    fmu = fm_upsample.reshape(fms[0] * fms[1], 1, *fms[2:])
+    fgrid = make_grid(fmu, nrow=8, padding=0).detach().numpy().transpose(1,2,0)
+    x_repeat = xs.repeat(1, 8, 1, 1).numpy().reshape(64,1,210,160)
+    xgrid = make_grid(torch.tensor(x_repeat), nrow=8, padding=0).detach().numpy().transpose(1,2,0)
+    fig = plt.figure(1, frameon=False, figsize=(50, 50))
+    im1 = plt.imshow(xgrid[:,:,0], cmap=plt.cm.jet)
+    im2 = plt.imshow(fgrid[:,:,0], cmap=plt.cm.jet, alpha=0.7)
+    plt.axis("off")
+    plt.savefig(wandb.run.dir + "/im.jpg")
+    # wandb.log({"chart": plt})
+    #wandb.log({"slot_fmaps": [wandb.Image(im, caption="Label")]})
 
 def compute_dci(encoder, weights):
     var_names = list(weights.keys())
