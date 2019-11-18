@@ -1,5 +1,5 @@
 from scripts.run_encoder import train_encoder, train_supervised_encoder
-from src.future import SKLearnProbeTrainer, get_feature_vectors, postprocess_raw_metrics
+from src.future import LinearProbeTrainer, GBTProbeTrainer, MLPProbeTrainer, get_feature_vectors, postprocess_raw_metrics
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods, prepend_prefix, append_suffix
 from src.encoders import SlotIWrapper, SlotEncoder,ConcatenateWrapper
@@ -69,12 +69,16 @@ def run_probe(args):
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
         log_fmaps(encoder, test_eps)
-        f1s = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
-        f1_df = pd.DataFrame(f1s)
-        compute_assigned_slot_metrics(f1_df)
-        compute_disentangling(f1_df)
-        weights = compute_all_slots_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels)
-        compute_dci(encoder, weights)
+
+        probe_dict = { "mlp":  MLPProbeTrainer,"gbt":GBTProbeTrainer,"linear":LinearProbeTrainer}
+        for probe_name, probe_trainer in probe_dict.items():
+            f1s = compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels, probe_trainer=probe_trainer, probe_name=probe_name)
+            f1_df = pd.DataFrame(f1s)
+            compute_assigned_slot_metrics(f1_df, probe_name)
+            compute_disentangling(f1_df, probe_name)
+            weights = compute_all_slots_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels,  probe_trainer=probe_trainer, probe_name=probe_name)
+            if probe_name == "linear":
+                compute_dci(encoder, weights, probe_name)
 
 
 def log_fmaps(encoder, episodes):
@@ -110,7 +114,7 @@ def log_fmaps(encoder, episodes):
     # wandb.log({"chart": plt})
     #wandb.log({"slot_fmaps": [wandb.Image(im, caption="Label")]})
 
-def compute_dci(encoder, weights):
+def compute_dci(encoder, weights, probe_name="linear"):
     var_names = list(weights.keys())
     importances = []
     for k in var_names:
@@ -123,13 +127,13 @@ def compute_dci(encoder, weights):
     slot_importances = imp.reshape(len(var_names), encoder.num_slots, encoder.slot_len).sum(axis=2)
     dci_disentangling = 1 - entropy(slot_importances, base=len(var_names))
     dci_completeness = 1 - entropy(slot_importances.T, base=encoder.num_slots)
-    prefixes = ["slot_{}_dci_disentangling".format(i) for i in range(encoder.num_slots)]
+    prefixes = ["slot_{}_dci_disentangling_{}_probe".format(i, probe_name) for i in range(encoder.num_slots)]
     dci_disentangling = dict(zip(prefixes, dci_disentangling))
-    dci_completeness = append_suffix(dict(zip(var_names, dci_completeness)),"_dci_completeness")
+    dci_completeness = append_suffix(dict(zip(var_names, dci_completeness)),"_dci_completeness_" + probe_name + "_probe")
     wandb.run.summary.update(dci_disentangling)
-    wandb.run.summary.update({"avg_dci_disentangling":np.mean(list(dci_disentangling.values()))})
+    wandb.run.summary.update({"avg_dci_disentangling_" + probe_name + "_probe": np.mean(list(dci_disentangling.values()))})
     wandb.run.summary.update(dci_completeness)
-    wandb.run.summary.update(({"avg_dci_completeness":np.mean(list(dci_completeness.values()))}))
+    wandb.run.summary.update(({"avg_dci_completeness_"+ probe_name + "_probe": np.mean(list(dci_completeness.values()))}))
 
 
 
@@ -139,32 +143,32 @@ def compute_dci(encoder, weights):
 
 
 # compute all slots
-def compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels):
+def compute_all_slots_metrics(encoder, tr_eps, tr_labels,test_eps, test_labels,probe_trainer=LinearProbeTrainer, probe_name="linear"):
 
 
     cat_slot_enc = ConcatenateWrapper(encoder)
     f_tr, y_tr = get_feature_vectors(cat_slot_enc, tr_eps, tr_labels)
     f_test, y_test = get_feature_vectors(cat_slot_enc, test_eps, test_labels)
-    trainer = SKLearnProbeTrainer(epochs=args.epochs,
+    trainer = probe_trainer(epochs=args.epochs,
                                   lr=args.probe_lr,
                                   patience=args.patience)
 
     cat_test_f1, weights = trainer.train_test(f_tr, y_tr, f_test, y_test)
     cat_test_f1 = postprocess_raw_metrics(cat_test_f1)
-    cat_test_f1 = append_suffix(cat_test_f1, "_f1_all_slots")
+    cat_test_f1 = prepend_prefix(cat_test_f1, "all_slots_f1_" + probe_name + "_probe_")
     wandb.run.summary.update(cat_test_f1)
     return weights
 
 
 
 # compute slot-wise
-def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels):
+def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels, probe_trainer=LinearProbeTrainer, probe_name="linear"):
     f1s = []
     for i in range(encoder.num_slots):
         slot_i_enc = SlotIWrapper(encoder,i)
         f_tr, y_tr = get_feature_vectors(slot_i_enc, tr_eps, tr_labels)
         f_test, y_test = get_feature_vectors(slot_i_enc, test_eps, test_labels)
-        trainer = SKLearnProbeTrainer(epochs=args.epochs,
+        trainer = probe_trainer(epochs=args.epochs,
                                       lr=args.probe_lr,
                                       patience=args.patience)
 
@@ -172,11 +176,12 @@ def compute_slotwise_metrics(encoder, tr_eps, tr_labels, test_eps, test_labels):
 
         f1s.append(deepcopy(test_f1score))
         sloti_test_f1 = append_suffix(test_f1score, "_f1_slot{}".format(i+1))
+        sloti_test_f1 = append_suffix(sloti_test_f1, "_" + probe_name + "_probe")
         wandb.run.summary.update(sloti_test_f1)
     return f1s
 
 
-def compute_assigned_slot_metrics(f1_df):
+def compute_assigned_slot_metrics(f1_df, probe_name="linear"):
     f1_np = f1_df.to_numpy()
     row_ind, col_ind = lsa(-f1_np)
     inds = list(zip(row_ind, col_ind))
@@ -184,21 +189,21 @@ def compute_assigned_slot_metrics(f1_df):
                       (slot_num, factor_num) in inds}
 
     assigned_slot_f1s = postprocess_raw_metrics(assigned_slot_f1s)
-    assigned_slot_f1s = append_suffix(assigned_slot_f1s,"_f1_assigned_slot")
+    assigned_slot_f1s = prepend_prefix(assigned_slot_f1s, "assigned_slot_f1_" + probe_name + "_probe_")
     wandb.run.summary.update(assigned_slot_f1s)
 
 
 
 # compute disentangling
-def compute_disentangling(df):
-    saps_compactness = append_suffix(compute_SAP(df), "_f1_sap_compactness")
+def compute_disentangling(df, probe_name="linear"):
+    saps_compactness = append_suffix(compute_SAP(df), "_f1_sap_compactness_" + probe_name + '_probe')
     wandb.run.summary.update(saps_compactness)
     avg_sap_compactness = np.mean(list(saps_compactness.values()))
-    wandb.run.summary.update({"avg_f1_sap_compactness": avg_sap_compactness})
+    wandb.run.summary.update({"avg_f1_sap_compactness_" + probe_name + "_probe": avg_sap_compactness})
     f1_maxes = dict(df.max())
     f1_maxes = postprocess_raw_metrics(f1_maxes)
     f1_maxes = {k:v for k, v in f1_maxes.items() if "avg" in k}
-    f1_maxes = append_suffix(f1_maxes, "_f1_best_slot_for_each")
+    f1_maxes = prepend_prefix(f1_maxes, "best_slot_for_each_f1_" + probe_name + '_probe_')
     wandb.run.summary.update(f1_maxes)
 
 def compute_variance(df):

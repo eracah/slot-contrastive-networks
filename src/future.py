@@ -6,6 +6,8 @@ from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import f1_score as compute_f1_score
 import warnings
 from atariari.benchmark.categorization import summary_key_dict
+from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.neural_network import MLPClassifier
 
 """Usage:
  tr_eps.extend(val_eps)
@@ -46,8 +48,119 @@ def calculate_accuracy(logits, labels, argmax=True):
     return acc, correct_or_not
 
 
+class MLPProbeTrainer(object):
+    def __init__(self,
+                 patience=15, **kwargs):
 
-class SKLearnProbeTrainer(object):
+        self.patience = patience
+
+
+        self.estimator = MLPClassifier(hidden_layer_sizes=(128,),
+                                                    early_stopping=True,
+                                                    n_iter_no_change=self.patience,
+                                                    validation_fraction=0.2,
+                                                    tol=1e-3)
+
+    def reset_estimator(self):
+        self.estimator = MLPClassifier(hidden_layer_sizes=(128,),
+                                       early_stopping=True,
+                                       n_iter_no_change=self.patience,
+                                       validation_fraction=0.2,
+                                       tol=1e-3)
+
+
+
+    def train_test(self, f_tr, y_tr, f_test,y_test):
+        print("train-test started!")
+        f1_dict = {}
+        weights_dict = {}
+        for label_name in y_tr.keys():
+            # print(label_name)
+            tr_labels = y_tr[label_name]
+            test_labels = y_test[label_name]
+            x_tr = deepcopy(f_tr)
+
+            # sklearn is annoying about classes that only appear once or twice
+            inds = [i for i, v in enumerate(tr_labels) if 0.2 * tr_labels.count(v) >= 3]
+            tr_labels = [tr_labels[ind] for ind in inds]
+            x_tr = np.asarray([x_tr[ind] for ind in inds])
+            self.estimator.fit(x_tr, tr_labels)
+            y_pred = self.estimator.predict(f_test)
+            # accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
+            warnings.filterwarnings('ignore')
+            f1score = compute_f1_score(test_labels, y_pred, average="weighted")
+            f1_dict[label_name] = f1score
+            # weights = self.estimator.feature_importances_.T
+            # weights_dict[label_name] = deepcopy(weights)
+            # reset estimator
+            self.reset_estimator()
+
+        # acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
+
+        return f1_dict, weights_dict
+
+
+class GBTProbeTrainer(object):
+    def __init__(self,
+                 patience=15,
+                 num_processes=4,
+                 lr=5e-4,
+                 epochs=100, **kwargs):
+
+        self.epochs = epochs
+        self.lr = lr
+        self.patience = patience
+        self.num_processes = num_processes
+
+
+        self.estimator = GradientBoostingClassifier(
+                                                    n_iter_no_change=self.patience,
+                                                    validation_fraction=0.2,
+                                                    tol=1e-3)
+
+    def reset_estimator(self):
+        self.estimator = GradientBoostingClassifier(
+                                                    n_iter_no_change=self.patience,
+                                                    validation_fraction=0.2,
+                                                    tol=1e-3)
+
+
+
+    def train_test(self, f_tr, y_tr, f_test,y_test):
+        print("train-test started!")
+        f1_dict = {}
+        weights_dict = {}
+        for label_name in y_tr.keys():
+            # print(label_name)
+            tr_labels = y_tr[label_name]
+            test_labels = y_test[label_name]
+            x_tr = deepcopy(f_tr)
+
+            # sklearn is annoying about classes that only appear once or twice
+            inds = [i for i, v in enumerate(tr_labels) if 0.2 * tr_labels.count(v) >= 3]
+            tr_labels = [tr_labels[ind] for ind in inds]
+            x_tr = np.asarray([x_tr[ind] for ind in inds])
+            self.estimator.fit(x_tr, tr_labels)
+            y_pred = self.estimator.predict(f_test)
+            # accuracy, _ = calculate_accuracy(y_pred, test_labels, argmax=False)
+            warnings.filterwarnings('ignore')
+            f1score = compute_f1_score(test_labels, y_pred, average="weighted")
+            f1_dict[label_name] = f1score
+            weights = self.estimator.feature_importances_.T
+            weights_dict[label_name] = deepcopy(weights)
+            # reset estimator
+            self.reset_estimator()
+
+        # acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
+
+        return f1_dict, weights_dict
+
+
+
+
+
+
+class LinearProbeTrainer(object):
     def __init__(self,
                  patience=15,
                  num_processes=4,
