@@ -60,7 +60,7 @@ def get_argparser():
                         help='Size of features')
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
-    parser.add_argument("--color", action='store_true', default=False)
+    parser.add_argument("--color", action='store_true', default=True)
     parser.add_argument("--end-with-relu", action='store_true', default=False)
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--num-rew-evals", type=int, default=10)

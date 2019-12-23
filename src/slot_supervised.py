@@ -5,7 +5,7 @@ from torch.utils.data import RandomSampler, BatchSampler
 from src.trainer import Trainer
 from src.utils import EarlyStopping, appendabledict, prepend_prefix, append_suffix
 from src.encoders import SlotEncoder
-from .future import calculate_accuracy
+from .evaluate import calculate_accuracy
 
 import time
 
