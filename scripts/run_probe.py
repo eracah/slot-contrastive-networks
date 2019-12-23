@@ -1,5 +1,6 @@
 from scripts.run_encoder import train_encoder, train_supervised_encoder
-from src.future import LinearProbeTrainer, GBTProbeTrainer, MLPProbeTrainer, get_feature_vectors, postprocess_raw_metrics
+from src.evaluate import LinearProbeTrainer, GBTProbeTrainer,\
+    MLPProbeTrainer, get_feature_vectors, postprocess_raw_metrics, AttentionProbeTrainer
 import torch
 from src.utils import get_argparser, train_encoder_methods, probe_only_methods, prepend_prefix, append_suffix
 from src.encoders import SlotIWrapper, SlotEncoder,ConcatenateWrapper
@@ -32,7 +33,7 @@ def run_probe(args):
 
     print("got episodes!")
 
-    if args.method  == "majority":
+    if args.method == "majority":
         test_acc, test_f1score = majority_baseline(tr_labels, test_labels, wandb)
         wandb.run.summary.update(test_acc)
         wandb.run.summary.update(test_f1score)
@@ -66,6 +67,13 @@ def run_probe(args):
             assert False, "No known method specified! Don't know what {} is".format(args.method)
 
         encoder.cpu()
+
+
+        wdci_dict = compute_explictness_weighted_dci(encoder, tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels)
+        wdci_dict = prepend_prefix(wdci_dict,"wdci_")
+        wandb.run.summary.update(wdci_dict)
+
+
         tr_eps.extend(val_eps)
         tr_labels.extend(val_labels)
         log_fmaps(encoder, test_eps)
@@ -114,6 +122,26 @@ def log_fmaps(encoder, episodes):
     # wandb.log({"chart": plt})
     #wandb.log({"slot_fmaps": [wandb.Image(im, caption="Label")]})
 
+
+def compute_explictness_weighted_dci(encoder, tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels):
+    f_tr, y_tr = get_feature_vectors(encoder, tr_eps, tr_labels)
+    f_val, y_val = get_feature_vectors(encoder, val_eps, val_labels)
+    f_test, y_test = get_feature_vectors(encoder, test_eps, test_labels)
+    attn_probe = AttentionProbeTrainer(epochs=args.epochs, patience=args.patience)
+    f1_dict, weights_dict = attn_probe.train_test(f_tr, y_tr, f_val, y_val, f_test, y_test)
+    f1_scores = list(f1_dict.values())
+    feat_imp = pd.DataFrame(weights_dict).values
+    keys = list(f1_dict.keys())
+    base = feat_imp.shape[0]
+    dci_disentangling = 1 - entropy(feat_imp, base=base)
+    weighted_dci = f1_scores * dci_disentangling
+    wdci_dict = dict(zip(keys, weighted_dci))
+    wdci_dict = postprocess_raw_metrics(wdci_dict)
+    return wdci_dict
+
+
+
+
 def compute_dci(encoder, weights, probe_name="linear"):
     var_names = list(weights.keys())
     importances = []
@@ -134,12 +162,6 @@ def compute_dci(encoder, weights, probe_name="linear"):
     wandb.run.summary.update({"avg_dci_disentangling_" + probe_name + "_probe": np.mean(list(dci_disentangling.values()))})
     wandb.run.summary.update(dci_completeness)
     wandb.run.summary.update(({"avg_dci_completeness_"+ probe_name + "_probe": np.mean(list(dci_completeness.values()))}))
-
-
-
-
-
-
 
 
 # compute all slots
