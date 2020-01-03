@@ -10,6 +10,7 @@ from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
+import pandas as pd
 from torch.optim import Adam
 """Usage:
  tr_eps.extend(val_eps)
@@ -72,16 +73,17 @@ class AttentionProbe(nn.Module):
 
 
 class AttentionProbeTrainer(object):
-    def __init__(self, epochs, patience=15, batch_size=64, **kwargs):
+    def __init__(self, epochs, patience=15, batch_size=64, lr=1e-4, **kwargs):
 
         self.patience = patience
         self.batch_size = batch_size
         self.epochs = epochs
+        self.lr = lr
 
 
     def fit_predict(self, f_tr, yt, f_val, yv, f_test, yte):
         attn_probe = AttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
-        opt = torch.optim.Adam(list(attn_probe.parameters()))
+        opt = torch.optim.Adam(list(attn_probe.parameters()), lr=self.lr)
         early_stopper = EarlyStopping(patience=self.patience, verbose=False)
         f_tr, yt,f_val, yv,f_test, yte = torch.tensor(f_tr),\
                                          torch.tensor(yt),torch.tensor(f_val),\
@@ -128,10 +130,10 @@ class AttentionProbeTrainer(object):
             f1_dict[label_name] = test_f1
             weights_dict[label_name] = avg_weight.detach().numpy()
 
-
+        importances_df = pd.DataFrame(weights_dict)
         # acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)
 
-        return f1_dict, weights_dict
+        return f1_dict, importances_df
 
 
 
