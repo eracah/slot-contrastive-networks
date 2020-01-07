@@ -9,13 +9,26 @@ from src.evaluate import LinearProbeTrainer, GBTProbeTrainer,\
     MLPProbeTrainer, postprocess_raw_metrics, AttentionProbeTrainer
 
 def compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y_test):
-    attn_probe = AttentionProbeTrainer(epochs=args.epochs, patience=args.patience, lr=args.probe_lr)
+
+
+
+    attn_probe = AttentionProbeTrainer(epochs=args.epochs, patience=args.patience, lr=args.probe_lr, type="linear")
     # scores: dict keys: factor name values: probe f1 score for that factor
     # importances_df: pandas df slot x factors
     scores, importances_df = attn_probe.train_test(f_tr, y_tr, f_val, y_val, f_test, y_test)
     imp_dict = convert_slotwise_df_to_flat_dict(importances_df)
     log_metrics(imp_dict, prefix="attn_lin_probe_importances_", suffix="_weights")
     log_metrics(scores, prefix="attn_lin_probe_explicitness_", suffix="_f1")
+
+    attn_probe = AttentionProbeTrainer(epochs=args.epochs, patience=args.patience, lr=args.probe_lr, type="mlp")
+    # scores: dict keys: factor name values: probe f1 score for that factor
+    # importances_df: pandas df slot x factors
+    scores, importances_df = attn_probe.train_test(f_tr, y_tr, f_val, y_val, f_test, y_test)
+    imp_dict = convert_slotwise_df_to_flat_dict(importances_df)
+    log_metrics(imp_dict, prefix="attn_mlp_probe_importances_", suffix="_weights")
+    log_metrics(scores, prefix="attn_mlp_probe_explicitness_", suffix="_f1")
+
+
 
     f_tr_val = np.concatenate((f_tr, f_val))
     y_tr.extend_update(y_val)

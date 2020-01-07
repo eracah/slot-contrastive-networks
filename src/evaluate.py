@@ -52,7 +52,7 @@ def calculate_accuracy(logits, labels, argmax=True):
 
 
 
-class AttentionProbe(nn.Module):
+class LinearAttentionProbe(nn.Module):
     """Attention oover slots to linear classifier"""
     def __init__(self, slot_len, num_classes):
         super().__init__()
@@ -69,20 +69,45 @@ class AttentionProbe(nn.Module):
         unnormalized_logits = self.fc(inp)
         return unnormalized_logits, w
 
+class MLPAttentionProbe(nn.Module):
+    """Attention oover slots to linear classifier"""
+    def __init__(self, slot_len, num_classes):
+        super().__init__()
+        self.slot_len = slot_len
+        self.attn = nn.MultiheadAttention(embed_dim=slot_len, num_heads=1)
+        self.mlp = nn.Sequential( nn.Linear(slot_len, 256),
+                                  nn.ReLU(),
+                                  nn.Linear(256, num_classes)
+                                  )
+
+    def forward(self, slots):
+        slots = slots.transpose(1,0)
+        v, w = self.attn(slots, slots, slots)
+        # just use the first token
+        inp = v[0]
+        w = w[:,0]
+        unnormalized_logits = self.mlp(inp)
+        return unnormalized_logits, w
+
 
 
 
 class AttentionProbeTrainer(object):
-    def __init__(self, epochs, patience=15, batch_size=64, lr=1e-4, **kwargs):
+    def __init__(self, epochs, patience=15, batch_size=64, lr=1e-4, type="linear",**kwargs):
 
         self.patience = patience
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr = lr
+        self.type=type
 
 
     def fit_predict(self, f_tr, yt, f_val, yv, f_test, yte):
-        attn_probe = AttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
+        if type == "linear":
+            attn_probe = LinearAttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
+        else:
+            attn_probe = MLPAttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
+
         opt = torch.optim.Adam(list(attn_probe.parameters()), lr=self.lr)
         early_stopper = EarlyStopping(patience=self.patience, verbose=False)
         f_tr, yt,f_val, yv,f_test, yte = torch.tensor(f_tr),\
@@ -144,14 +169,14 @@ class MLPProbeTrainer(object):
         self.patience = patience
 
 
-        self.estimator = MLPClassifier(hidden_layer_sizes=(128,),
+        self.estimator = MLPClassifier(hidden_layer_sizes=(256,),
                                                     early_stopping=True,
                                                     n_iter_no_change=self.patience,
                                                     validation_fraction=0.2,
                                                     tol=1e-3)
 
     def reset_estimator(self):
-        self.estimator = MLPClassifier(hidden_layer_sizes=(128,),
+        self.estimator = MLPClassifier(hidden_layer_sizes=(256,),
                                        early_stopping=True,
                                        n_iter_no_change=self.patience,
                                        validation_fraction=0.2,
