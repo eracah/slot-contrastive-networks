@@ -31,6 +31,7 @@ def train_encoder(args):
     if args.method == "nce":
         from src.slot_nce import NCETrainer
         trainer = NCETrainer(args, device=device, wandb=wandb)
+
     elif args.method == "shared_score_fxn":
         from src.shared_score_fxn import SharedScoreFxnTrainer
         trainer = SharedScoreFxnTrainer(args, device=device, wandb=wandb)
@@ -42,6 +43,10 @@ def train_encoder(args):
     elif args.method == "loss1_only":
         from src.loss1_only import Loss1OnlyTrainer
         trainer = Loss1OnlyTrainer(args, device=device, wandb=wandb)
+
+    elif args.method == "loss2_only":
+        from src.loss2_only import Loss2OnlyTrainer
+        trainer = Loss2OnlyTrainer(args, device=device, wandb=wandb)
 
 
 
