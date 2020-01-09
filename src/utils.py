@@ -12,7 +12,7 @@ from collections import defaultdict
 from pathlib import Path
 
 # methods that need encoder trained before
-train_encoder_methods = ["nce", "infonce","shared_score_fxn"]
+train_encoder_methods = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
 probe_only_methods = ["supervised", "random-cnn", "majority"]
 
 
@@ -60,7 +60,7 @@ def get_argparser():
                         help='Size of features')
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
-    parser.add_argument("--color", action='store_true', default=False)
+    parser.add_argument("--color", action='store_true', default=True)
     parser.add_argument("--end-with-relu", action='store_true', default=False)
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--num-rew-evals", type=int, default=10)
@@ -126,6 +126,8 @@ def append_suffix(dictionary, suffix):
     for k, v in dictionary.items():
         new_dict[k + suffix] = v
     return new_dict
+
+
 
 def compute_dict_average(metric_dict):
     return np.mean(list(metric_dict.values()))
@@ -239,6 +241,23 @@ class appendabledict(defaultdict):
          """
         for k, v in other_dict.items():
             self.__getitem__(k).append(v)
+
+    def append_updates(self, list_of_dicts):
+        """appends current dict's values with values from other_dict
+
+        Parameters
+        ----------
+        other_dict : dict
+            A dictionary that you want to append to this dictionary
+
+
+        Returns
+        -------
+        Nothing. The side effect is this dict's values change
+
+         """
+        for other_dict in list_of_dicts:
+            self.append_update(other_dict)
 
     def extend_update(self, other_dict):
         """appends current dict's values with values from other_dict
