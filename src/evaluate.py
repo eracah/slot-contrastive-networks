@@ -75,7 +75,7 @@ class MLPAttentionProbe(nn.Module):
         super().__init__()
         self.slot_len = slot_len
         self.attn = nn.MultiheadAttention(embed_dim=slot_len, num_heads=1)
-        self.mlp = nn.Sequential( nn.Linear(slot_len, 256),
+        self.mlp = nn.Sequential(nn.Linear(slot_len, 256),
                                   nn.ReLU(),
                                   nn.Linear(256, num_classes)
                                   )

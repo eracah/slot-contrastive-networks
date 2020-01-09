@@ -10,10 +10,9 @@ from a2c_ppo_acktr.envs import make_vec_envs
 from a2c_ppo_acktr.utils import get_vec_normalize
 from collections import defaultdict
 from pathlib import Path
-from torch import nn
 
 # methods that need encoder trained before
-train_encoder_methods = ["nce", "infonce","shared_score_fxn", "loss1_only"]
+train_encoder_methods = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
 probe_only_methods = ["supervised", "random-cnn", "majority"]
 
 
@@ -129,39 +128,6 @@ def append_suffix(dictionary, suffix):
     return new_dict
 
 
-def log_fmaps(encoder, episodes):
-    from torchvision.utils import make_grid
-    import matplotlib.pyplot as plt
-    batch_size = 8
-    indices = np.random.randint(len(episodes), size=(batch_size,))
-
-
-
-    episodes_batch = [episodes[i] for i in indices]
-
-    xs = []
-    for ep_ind, episode in enumerate(episodes_batch):
-        # Get one sample from this episode
-        t = np.random.randint(len(episode))
-        xs.append(episode[t])
-
-    xs = torch.stack(xs) / 255.
-    fmaps, slot_fmaps = encoder.get_fmaps(xs)
-    slot_fmaps = slot_fmaps.detach()
-    fm_upsample = nn.functional.interpolate(slot_fmaps, size=xs.shape[-2:], mode="bilinear")
-    fms = fm_upsample.shape
-    fmu = fm_upsample.reshape(fms[0] * fms[1], 1, *fms[2:])
-    fgrid = make_grid(fmu, nrow=8, padding=0).detach().numpy().transpose(1,2,0)
-    x_repeat = xs.repeat(1, 8, 1, 1).numpy().reshape(64,1,210,160)
-    xgrid = make_grid(torch.tensor(x_repeat), nrow=8, padding=0).detach().numpy().transpose(1,2,0)
-    fig = plt.figure(1, frameon=False, figsize=(50, 50))
-    im1 = plt.imshow(xgrid[:,:,0], cmap=plt.cm.jet)
-    im2 = plt.imshow(fgrid[:,:,0], cmap=plt.cm.jet, alpha=0.7)
-    plt.axis("off")
-    plt.savefig(wandb.run.dir + "/im.jpg")
-    # wandb.log({"chart": plt})
-    #wandb.log({"slot_fmaps": [wandb.Image(im, caption="Label")]})
-
 
 def compute_dict_average(metric_dict):
     return np.mean(list(metric_dict.values()))
@@ -275,6 +241,23 @@ class appendabledict(defaultdict):
          """
         for k, v in other_dict.items():
             self.__getitem__(k).append(v)
+
+    def append_updates(self, list_of_dicts):
+        """appends current dict's values with values from other_dict
+
+        Parameters
+        ----------
+        other_dict : dict
+            A dictionary that you want to append to this dictionary
+
+
+        Returns
+        -------
+        Nothing. The side effect is this dict's values change
+
+         """
+        for other_dict in list_of_dicts:
+            self.append_update(other_dict)
 
     def extend_update(self, other_dict):
         """appends current dict's values with values from other_dict

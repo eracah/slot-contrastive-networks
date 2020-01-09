@@ -7,6 +7,8 @@ from src.metrics import compute_and_log_raw_quant_metrics
 import wandb
 from src.majority import majority_baseline
 from atariari.benchmark.episodes import get_episodes
+from src.visualize import plot_fmaps
+
 
 def run_probe(args):
     #wandb.config.update(vars(args))
@@ -32,6 +34,8 @@ def run_probe(args):
         wandb.run.summary.update(test_f1score)
     else:
         encoder = get_encoder(args, observation_shape=obs_shape)
+        fig = plot_fmaps(encoder, test_eps, num_repeat=encoder.num_slots)
+        fig.savefig(wandb.run.dir + "/fmaps.png")
         f_tr, y_tr, f_val, y_val, f_test, y_test = get_feature_vector_tr_split(encoder, tr_eps, tr_labels,val_eps,
                                                                                val_labels,  test_eps, test_labels)
         compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y_test)
