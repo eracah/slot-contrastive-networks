@@ -225,13 +225,13 @@ class InfoNCETrainer(Trainer):
         return self.encoder
 
     def log_results(self, loss, loss1, loss2, acc, acc1, acc2, mode=""):
-        print("\t{}: ".format(mode))
-        print("\t\tLoss: {0:.4f}".format(loss))
-        print("\t\t\tLoss1: {0:.4f}".format(loss1))
-        print("\t\t\tLoss2: {0:.4f}".format(loss2))
-        print("\t\tAcc: {0:.2f}%".format(100*acc))
-        print("\t\t\tAcc1: {0:.2f}%".format(100 * acc1))
-        print("\t\t\tAcc2: {0:.2f}%".format(100 * acc2))
+        print("\t{}: ".format(mode), flush=True)
+        print("\t\tLoss: {0:.4f}".format(loss), flush=True)
+        print("\t\t\tLoss1: {0:.4f}".format(loss1), flush=True)
+        print("\t\t\tLoss2: {0:.4f}".format(loss2), flush=True)
+        print("\t\tAcc: {0:.2f}%".format(100*acc), flush=True)
+        print("\t\t\tAcc1: {0:.2f}%".format(100 * acc1), flush=True)
+        print("\t\t\tAcc2: {0:.2f}%".format(100 * acc2), flush=True)
 
 
         #self.wandb.log({prefix + '_loss': epoch_loss}, step=epoch_idx)

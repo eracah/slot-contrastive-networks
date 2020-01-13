@@ -3,7 +3,8 @@ import wandb
 import os
 from atariari.benchmark.episodes import get_episodes
 from src.utils import get_argparser, append_suffix
-
+import os
+import psutil
 
 def train_encoder(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")

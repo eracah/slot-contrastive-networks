@@ -10,8 +10,6 @@ from src.evaluate import LinearProbeTrainer, GBTProbeTrainer,\
 
 def compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y_test):
 
-
-
     attn_probe = AttentionProbeTrainer(epochs=args.epochs, patience=args.patience, lr=args.probe_lr, type="linear")
     # scores: dict keys: factor name values: probe f1 score for that factor
     # importances_df: pandas df slot x factors
@@ -32,7 +30,7 @@ def compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y
 
     f_tr_val = np.concatenate((f_tr, f_val))
     y_tr.extend_update(y_val)
-    probe_dict = {"mlp": MLPProbeTrainer, "gbt": GBTProbeTrainer, "linear": LinearProbeTrainer}
+    probe_dict = {"linear": LinearProbeTrainer, "mlp": MLPProbeTrainer, "gbt": GBTProbeTrainer}
     for probe_name, probe_trainer in probe_dict.items():
         # pandas df slot x factors
         slotwise_expl_df = compute_slotwise_explicitness(f_tr_val, y_tr, f_test, y_test, args, probe_trainer=probe_trainer)
