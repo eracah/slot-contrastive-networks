@@ -2,13 +2,14 @@
 
 
 #SBATCH --gres=gpu:1
-#SBATCH --mem=50G
+#SBATCH --mem=64G
 #SBATCH -c 8
-#SBATCH --time=24:00:00
+#SBATXH -x rtx6
+#SBATCH --time=48:00:00
 #SBATCH -o /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out  # Write the log on tmp1
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
 
-## #SBATCH --qos=unkillable                      # Ask for unkillable job
+## #SBATCH --partition=unkillable                      # Ask for unkillable job
 # 1. Load your environment
 # conda activate <env_name>
 
