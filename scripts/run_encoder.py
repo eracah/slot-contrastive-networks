@@ -2,10 +2,11 @@ import torch
 import wandb
 import os
 from atariari.benchmark.episodes import get_episodes
-from src.utils import get_argparser, append_suffix
+from src.utils import get_argparser, append_suffix, print_memory
 import os
 import psutil
-
+import shutil
+from pathlib import Path
 def train_encoder(args):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
@@ -23,6 +24,8 @@ def train_encoder(args):
                                  train_mode="train_encoder",
                                  checkpoint_index=args.checkpoint_index,
                                  min_episode_length=args.batch_size)
+
+    print_memory("Encoder Eps Loaded")
 
     observation_shape = tr_eps[0][0].shape
     torch.set_num_threads(1)
@@ -56,7 +59,10 @@ def train_encoder(args):
         assert False, "method {} has no trainer".format(args.method)
 
     encoder = trainer.train(tr_eps, val_eps)
-
+    torch.save(encoder.state_dict(), wandb.run.dir + "/encoder.pt")
+    wrd = Path(wandb.run.dir)
+    fd = Path(args.final_dir)
+    shutil.copytree(wrd.absolute(), fd.absolute() / wrd.stem)
     return encoder
 
 def train_supervised_encoder(args):

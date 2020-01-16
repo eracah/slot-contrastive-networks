@@ -9,15 +9,18 @@ from sklearn.metrics import f1_score as compute_f1_score
 from atariari.benchmark.envs import get_vec_normalize
 from collections import defaultdict
 from pathlib import Path
-
+import psutil
 # methods that need encoder trained before
 train_encoder_methods = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
 probe_only_methods = ["supervised", "random-cnn", "majority"]
 
 
+
+
 def get_argparser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-dir", type=str, default=".")
+    parser.add_argument("--final-dir", type=str, default=".")
     parser.add_argument("--num_slots", type=int, default=8)
     parser.add_argument("--slot-len", type=int, default=256)
     parser.add_argument("--fmap-num", default="f7")
@@ -57,7 +60,7 @@ def get_argparser():
                         help='Encoder type (Impala or Nature)')
     parser.add_argument('--feature-size', type=int, default=256,
                         help='Size of features')
-    parser.add_argument("--patience", type=int, default=15)
+    parser.add_argument("--patience", type=int, default=7)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--color", action='store_true', default=True)
     parser.add_argument("--end-with-relu", action='store_true', default=False)
@@ -76,6 +79,10 @@ def get_argparser():
                         default="random_agent")
     parser.add_argument('--num-runs', type=int, default=1)
     return parser
+
+def print_memory(name=""):
+    process = psutil.Process(os.getpid())
+    print("%3.4f GB for %s"%(process.memory_info().rss / 2**30,name), flush=True)  # in bytes
 
 
 def prepend_prefix(dictionary, prefix):

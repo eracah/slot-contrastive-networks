@@ -22,7 +22,7 @@ echo $1
 export module_name=$1
 shift
 echo $module_name
-python -m $module_name  $@ --run-dir $SLURM_TMPDIR
+python -m $module_name  $@ --run-dir $SLURM_TMPDIR --final-dir /network/tmp1/racaheva/coors/wandb
 
 # 4. Copy whatever you want to save on $SCRATCH
 cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
