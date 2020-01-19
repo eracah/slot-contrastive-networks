@@ -59,7 +59,7 @@ def train_encoder(args):
         assert False, "method {} has no trainer".format(args.method)
 
     encoder = trainer.train(tr_eps, val_eps)
-    torch.save(encoder.state_dict(), wandb.run.dir + "/encoder.pt")
+    torch.save(encoder.cpu().state_dict(), wandb.run.dir + "/encoder.pt")
     wrd = Path(wandb.run.dir)
     fd = Path(args.final_dir)
     shutil.copytree(wrd.absolute(), fd.absolute() / wrd.stem)
