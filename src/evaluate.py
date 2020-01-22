@@ -90,7 +90,14 @@ class MLPAttentionProbe(nn.Module):
 
 
 class AttentionProbeTrainer(object):
-    def __init__(self, epochs, patience=15, batch_size=64, lr=1e-4, type="linear", device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),**kwargs):
+    def __init__(self, epochs,
+                 patience=15,
+                 batch_size=64,
+                 lr=1e-4,
+                 type="linear",
+                 device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),
+                 num_classes = 256,
+                 **kwargs):
 
         self.patience = patience
         self.batch_size = batch_size
@@ -98,13 +105,14 @@ class AttentionProbeTrainer(object):
         self.lr = lr
         self.type=type
         self.device = device
+        self.num_classes = num_classes
 
 
     def fit_predict(self, f_tr, yt, f_val, yv, f_test, yte):
         if type == "linear":
-            attn_probe = LinearAttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
+            attn_probe = LinearAttentionProbe(slot_len=f_tr.shape[2], num_classes=self.num_classes)
         else:
-            attn_probe = MLPAttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
+            attn_probe = MLPAttentionProbe(slot_len=f_tr.shape[2], num_classes=self.num_classes)
 
         attn_probe.to(self.device)
         opt = torch.optim.Adam(list(attn_probe.parameters()), lr=self.lr)
@@ -122,8 +130,6 @@ class AttentionProbeTrainer(object):
         while (not early_stopper.early_stop) and epoch < self.epochs:
             attn_probe.train()
             for x, y in tr_dl:
-                x.to(self.device)
-                y.to(self.device)
                 opt.zero_grad()
                 pred, w = attn_probe(x)
                 loss = nn.CrossEntropyLoss()(pred,y.long())
@@ -149,9 +155,9 @@ class AttentionProbeTrainer(object):
         weights_dict = {}
         for label_name in y_tr.keys():
             # print(label_name)
-            yt = y_tr[label_name]
-            yv = y_val[label_name]
-            yte = y_test[label_name]
+            yt = torch.tensor(y_tr[label_name]).to(self.device).long()
+            yv = torch.tensor(y_val[label_name]).to(self.device).long()
+            yte = torch.tensor(y_test[label_name]).to(self.device).long()
             test_f1, avg_weight = self.fit_predict(f_tr, yt, f_val, yv, f_test, yte)
             f1_dict[label_name] = test_f1
             weights_dict[label_name] = avg_weight.detach().numpy()
