@@ -139,13 +139,13 @@ class AttentionProbeTrainer(object):
             attn_probe.eval()
             for x, y in val_dl:
                 pred, w = attn_probe(x)
-                epoch_val_f1 = calculate_f1_score(pred.detach().numpy(), y.detach().numpy())
+                epoch_val_f1 = calculate_f1_score(pred.detach().cpu().numpy(), y.detach().cpu().numpy())
             early_stopper(epoch_val_f1, attn_probe)
             epoch += 1
 
         for x, y in test_dl:
             pred, w = attn_probe(x)
-            test_f1 = calculate_f1_score(pred.detach().numpy(), y.detach().numpy())
+            test_f1 = calculate_f1_score(pred.detach().cpu().numpy(), y.detach().cpu().numpy())
         avg_weight = w.mean(dim=0)
         return test_f1, avg_weight
 
@@ -160,7 +160,7 @@ class AttentionProbeTrainer(object):
             yte = torch.tensor(y_test[label_name]).to(self.device).long()
             test_f1, avg_weight = self.fit_predict(f_tr, yt, f_val, yv, f_test, yte)
             f1_dict[label_name] = test_f1
-            weights_dict[label_name] = avg_weight.detach().numpy()
+            weights_dict[label_name] = avg_weight.detach().cpu().numpy()
 
         importances_df = pd.DataFrame(weights_dict)
         # acc_dict, f1_dict = postprocess_raw_metrics(acc_dict, f1_dict)

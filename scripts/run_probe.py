@@ -19,7 +19,7 @@ def run_probe(args):
     print_memory("start memory")
     encoder = get_encoder(args)
     encoder.to(device)
-    print_memory("after encoder trained/oaded")
+    print_memory("after encoder trained/loaded")
     f_tr, f_val, f_test, y_tr, y_val, y_test = get_probe_data(args, device, encoder)
 
     print_memory("after probe data loaded")
