@@ -90,13 +90,14 @@ class MLPAttentionProbe(nn.Module):
 
 
 class AttentionProbeTrainer(object):
-    def __init__(self, epochs, patience=15, batch_size=64, lr=1e-4, type="linear",**kwargs):
+    def __init__(self, epochs, patience=15, batch_size=64, lr=1e-4, type="linear", device=torch.device("cuda" if torch.cuda.is_available() else "cpu"),**kwargs):
 
         self.patience = patience
         self.batch_size = batch_size
         self.epochs = epochs
         self.lr = lr
         self.type=type
+        self.device = device
 
 
     def fit_predict(self, f_tr, yt, f_val, yv, f_test, yte):
@@ -105,6 +106,7 @@ class AttentionProbeTrainer(object):
         else:
             attn_probe = MLPAttentionProbe(slot_len=f_tr.shape[2], num_classes=np.max(yt) + 1)
 
+        attn_probe.to(self.device)
         opt = torch.optim.Adam(list(attn_probe.parameters()), lr=self.lr)
         early_stopper = EarlyStopping(patience=self.patience, verbose=False)
         f_tr, yt,f_val, yv,f_test, yte = torch.tensor(f_tr),\
@@ -120,6 +122,8 @@ class AttentionProbeTrainer(object):
         while (not early_stopper.early_stop) and epoch < self.epochs:
             attn_probe.train()
             for x, y in tr_dl:
+                x.to(self.device)
+                y.to(self.device)
                 opt.zero_grad()
                 pred, w = attn_probe(x)
                 loss = nn.CrossEntropyLoss()(pred,y.long())
