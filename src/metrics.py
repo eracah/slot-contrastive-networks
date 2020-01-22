@@ -5,8 +5,11 @@ import wandb
 import pandas as pd
 import numpy as np
 from scipy.stats import entropy
-from src.evaluate import LinearProbeTrainer, GBTProbeTrainer,\
-    MLPProbeTrainer, postprocess_raw_metrics, AttentionProbeTrainer
+from src.evaluate import  AttentionProbeTrainer
+from src.utils import appendabledict, compute_dict_average, append_suffix
+from atariari.benchmark.categorization import summary_key_dict
+
+from atariari.benchmark.probe import train_all_probes
 
 def compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y_test):
 
@@ -27,86 +30,54 @@ def compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y
     log_metrics(scores, prefix="attn_mlp_probe_explicitness_", suffix="_f1")
 
 
+    slotwise_expl_df = get_explicitness_for_every_slot_for_every_factor(f_tr, y_tr, f_val, y_val,  f_test, y_test, args)
 
-    f_tr_val = np.concatenate((f_tr, f_val))
-    y_tr.extend_update(y_val)
-    probe_dict = {"linear": LinearProbeTrainer, "mlp": MLPProbeTrainer} #, "gbt": GBTProbeTrainer}
-    for probe_name, probe_trainer in probe_dict.items():
-        # pandas df slot x factors
-        slotwise_expl_df = compute_slotwise_explicitness(f_tr_val, y_tr, f_test, y_test, args, probe_trainer=probe_trainer)
+    # dict key: factor name, value: explicitness of matched slot with that factor
+    matched_slot_expl = compute_matched_slot_explicitness(slotwise_expl_df)
+    best_slot_expl = compute_best_slot_explicitness(slotwise_expl_df)
+    slotwise_expl_dict = convert_slotwise_df_to_flat_dict(slotwise_expl_df)
 
-        # dict key: factor name, value: explicitness of matched slot with that factor
-        assigned_slot_expl = compute_matched_slot_explicitness(slotwise_expl_df)
-        # dict key: factor name, value: explicitness for that factor from concatenated slots
-        cat_slots_expl = compute_concatenated_slots_explicitness(f_tr_val, y_tr, f_test, y_test, args,
-                                                                 probe_trainer=probe_trainer)
-
-        slotwise_expl_dict = convert_slotwise_df_to_flat_dict(slotwise_expl_df)
-        log_metrics(slotwise_expl_dict, prefix="slotwise_explicitness_" + probe_name + "_", suffix="_f1")
-        postprocess_and_log_metrics(assigned_slot_expl, prefix="assigned_slot_explicitness_" + probe_name + "_",
-                                    suffix="_f1")
-        postprocess_and_log_metrics(cat_slots_expl, prefix="concatenated_slot_explicitness_" + probe_name + "_",
-                                    suffix="_f1")
-
+    log_metrics(slotwise_expl_dict, prefix="slotwise_explicitness_", suffix="_f1")
+    postprocess_and_log_metrics(matched_slot_expl, prefix="assigned_slot_explicitness_",
+                                suffix="_f1")
+    postprocess_and_log_metrics(best_slot_expl, prefix="best_slot_explicitness_",
+                                suffix="_f1")
 
 
 # compute slot-wise
-def compute_slotwise_explicitness(f_tr, y_tr, f_test, y_test, args, probe_trainer=LinearProbeTrainer):
+def get_explicitness_for_every_slot_for_every_factor(f_tr, y_tr, f_val, y_val,  f_test, y_test, args):
     f1s = []
     num_slots = f_tr.shape[1]
     for i in range(num_slots):
-        trainer = probe_trainer(epochs=args.epochs,
-                                      lr=args.probe_lr,
-                                      patience=args.patience)
-        sl_tr, sl_test = f_tr[:, i], f_test[:, i]
+        sl_tr, sl_val, sl_test = f_tr[:, i], f_val[:,i], f_test[:, i]
+        encoder = None #because inouts are vectors
+        representation_len = sl_tr.shape[-1]
+        test_acc, test_f1score = train_all_probes(encoder, sl_tr, sl_val,sl_test,y_tr, y_val, y_test, representation_len, args, wandb.run.dir)
 
-        test_f1score, weights = trainer.train_test(sl_tr, y_tr, sl_test, y_test)
+
 
         f1s.append(deepcopy(test_f1score))
 
     return pd.DataFrame(f1s)
 
 
-def compute_matched_slot_explicitness(slotwise_explicitness):
-    f1_np = slotwise_explicitness.to_numpy()
+def compute_matched_slot_explicitness(slotwise_explicitness_df):
+    f1_np = slotwise_explicitness_df.to_numpy()
     row_ind, col_ind = lsa(-f1_np)
     inds = list(zip(row_ind, col_ind))
-    assigned_slot_f1s = {slotwise_explicitness.columns[factor_num]: f1_np[slot_num, factor_num] for
+    assigned_slot_f1s = {slotwise_explicitness_df.columns[factor_num]: f1_np[slot_num, factor_num] for
                          (slot_num, factor_num) in inds}
 
     return assigned_slot_f1s
 
-def compute_concatenated_slots_explicitness(f_tr, y_tr, f_test, y_test, args, probe_trainer=LinearProbeTrainer):
 
-    f_tr_cat = f_tr.reshape(f_tr.shape[0],-1)
-    f_test_cat = f_test.reshape(f_test.shape[0], -1)
-
-    trainer = probe_trainer(epochs=args.epochs,
-                                  lr=args.probe_lr,
-                                  patience=args.patience)
-
-    cat_test_f1, weights = trainer.train_test(f_tr_cat, y_tr, f_test_cat, y_test)
-    return cat_test_f1
-
-
-# compute disentangling
-def compute_sap(df, probe_name="linear"):
-    saps_compactness = append_suffix(compute_SAP(df), "_f1_sap_compactness_" + probe_name + '_probe')
-
-    avg_sap_compactness = np.mean(list(saps_compactness.values()))
-    f1_maxes = dict(df.max())
-    f1_maxes = postprocess_raw_metrics(f1_maxes)
-    f1_maxes = {k:v for k, v in f1_maxes.items() if "avg" in k}
-    f1_maxes = prepend_prefix(f1_maxes, "best_slot_for_each_f1_" + probe_name + '_probe_')
-
-def compute_SAP(df):
-        return {str(k): np.abs(df.nlargest(2, [k])[k].diff().iloc[1]) for k in df.columns}
+def compute_best_slot_explicitness(slotwise_explicitness_df):
+    return dict(slotwise_explicitness_df.max())
 
 
 def convert_slotwise_df_to_flat_dict(df):
     dic = {col: df.values[:, i] for i, col in enumerate(df.columns)}
     return dic
-
 
 
 def log_metrics(dic, prefix, suffix):
@@ -126,15 +97,24 @@ def compute_dci_d(slot_importances, explicitness_scores, weighted_by_explicitnes
         dci_d = explicitness_scores * dci_d
     return dci_d
 
+def compute_category_avgs(metric_dict):
+    category_dict = {}
+    for category_name, category_keys in summary_key_dict.items():
+        category_values = [v for k, v in metric_dict.items() if k in category_keys]
+        if len(category_values) < 1:
+            continue
+        category_mean = np.mean(category_values)
+        category_dict[category_name + "_avg"] = category_mean
+    return category_dict
 
 
-# def compute_slot_importances_from_feat_importances(feat_imps, num_slots, slot_len):
-#     importances = []
-#     for k, feat_imp in var_names:
-#         raw_imp = np.abs(feat_imps[k])
-#         normalized_imp = raw_imp / raw_imp.sum(axis=0)
-#         class_avged_imp = normalized_imp.mean(axis=1)
-#         importances.append(class_avged_imp)
-#     imp = np.stack(importances)
-#     # split into importances for the weights for each slot and sum to get importances for each slot
-#     slot_importances = imp.reshape(len(var_names), num_slots, slot_len).sum(axis=2)
+def postprocess_raw_metrics(metric_dict):
+    overall_avg = compute_dict_average(metric_dict)
+    category_avgs_dict = compute_category_avgs(metric_dict)
+    avg_across_categories = compute_dict_average(category_avgs_dict)
+    metric_dict.update(category_avgs_dict)
+
+    metric_dict["overall_avg"] = overall_avg
+    metric_dict["across_categories_avg"] = avg_across_categories
+
+    return metric_dict

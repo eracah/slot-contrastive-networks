@@ -1,11 +1,11 @@
 import torch
-from src.utils import appendabledict, compute_dict_average, append_suffix, EarlyStopping
+from src.utils import EarlyStopping
 from copy import deepcopy
 import numpy as np
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import f1_score as compute_f1_score
 import warnings
-from atariari.benchmark.categorization import summary_key_dict
+
 from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.neural_network import MLPClassifier
 from torch import nn
@@ -21,18 +21,14 @@ from torch.optim import Adam
  test_acc, test_f1score = trainer.train_test(tr_eps, val_eps, tr_labels, val_labels,
                                             test_eps, test_labels) """
 
-def get_feature_vectors(encoder, episodes, episode_labels):
-    vectors = []
-    labels = appendabledict()
-    for ep_ind in range(len(episodes)):
-        x = torch.stack(episodes[ep_ind]).cpu() / 255.
-        y = episode_labels[ep_ind]
-        for label in y:
-            labels.append_update(label)
-        z = encoder(x).detach().cpu().numpy()
-        vectors.append(z)
-    vectors = np.concatenate(vectors)
-    return vectors, labels
+
+def encode_feature_vectors(encoder, device, *frame_tensors):
+    zs = []
+    for frame_tensor in frame_tensors:
+        x = frame_tensor.to(torch.float) / 255.
+        z = encoder(x).detach().to(device)
+        zs.append(z)
+    return zs
 
 
 def calculate_f1_score(logits, labels):
@@ -114,9 +110,9 @@ class AttentionProbeTrainer(object):
                                          torch.tensor(yt),torch.tensor(f_val),\
                                          torch.tensor(yv), torch.tensor(f_test), torch.tensor(yte)
         tr_ds, val_ds, test_ds = TensorDataset(f_tr, yt), TensorDataset(f_val, yv), TensorDataset(f_test, yte)
-        tr_dl, val_dl, test_dl = DataLoader(tr_ds, batch_size=self.batch_size),\
-                                 DataLoader(val_ds,batch_size=f_val.shape[0]), \
-                                 DataLoader(val_ds, batch_size=f_test.shape[0])
+        tr_dl, val_dl, test_dl = DataLoader(tr_ds, batch_size=self.batch_size, shuffle=True),\
+                                 DataLoader(val_ds,batch_size=f_val.shape[0], shuffle=True), \
+                                 DataLoader(val_ds, batch_size=f_test.shape[0], shuffle=True)
 
 
         epoch = 0
@@ -348,25 +344,5 @@ class LinearProbeTrainer(object):
 
 
 
-def compute_category_avgs(metric_dict):
-    category_dict = {}
-    for category_name, category_keys in summary_key_dict.items():
-        category_values = [v for k, v in metric_dict.items() if k in category_keys]
-        if len(category_values) < 1:
-            continue
-        category_mean = np.mean(category_values)
-        category_dict[category_name + "_avg"] = category_mean
-    return category_dict
 
-
-def postprocess_raw_metrics(metric_dict):
-    overall_avg = compute_dict_average(metric_dict)
-    category_avgs_dict = compute_category_avgs(metric_dict)
-    avg_across_categories = compute_dict_average(category_avgs_dict)
-    metric_dict.update(category_avgs_dict)
-
-    metric_dict["overall_avg"] = overall_avg
-    metric_dict["across_categories_avg"] = avg_across_categories
-
-    return metric_dict
 

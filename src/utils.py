@@ -60,7 +60,7 @@ def get_argparser():
                         help='Encoder type (Impala or Nature)')
     parser.add_argument('--feature-size', type=int, default=256,
                         help='Size of features')
-    parser.add_argument("--patience", type=int, default=7)
+    parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--color", action='store_true', default=True)
     parser.add_argument("--end-with-relu", action='store_true', default=False)

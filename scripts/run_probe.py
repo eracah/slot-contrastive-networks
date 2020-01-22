@@ -1,5 +1,5 @@
 from scripts.run_encoder import train_encoder, train_supervised_encoder
-from src.evaluate import get_feature_vectors
+from src.evaluate import encode_feature_vectors
 import torch
 from src.utils import get_argparser, train_encoder_methods, print_memory
 from src.encoders import SlotEncoder
@@ -13,48 +13,16 @@ import os
 import psutil
 from pathlib import Path
 import shutil
-def get_probe_feature_vectors(args, encoder):
-    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = get_episodes(steps=args.probe_num_frames,
-                                                                                 env_name=args.env_name,
-                                                                                 seed=args.seed,
-                                                                                 num_processes=args.num_processes,
-                                                                                 num_frame_stack=args.num_frame_stack,
-                                                                                 downsample=not args.no_downsample,
-                                                                                 color=args.color,
-                                                                                 entropy_threshold=args.entropy_threshold,
-                                                                                 collect_mode=args.probe_collect_mode,
-                                                                                 train_mode="probe",
-                                                                                 checkpoint_index=args.checkpoint_index,
-                                                                                 min_episode_length=args.batch_size
-                                                                                 )
-
-    print_memory("After Probe Eps Loaded")
-    fig = plot_fmaps(encoder, test_eps, num_repeat=encoder.num_slots)
-    fig.savefig(wandb.run.dir + "/fmaps.png")
-
-    wrd = Path(wandb.run.dir)
-    fd = Path(args.final_dir)
-    im = wrd.absolute() / Path("fmaps.png")
-    dest_dir = fd.absolute() / wrd.stem
-    if not dest_dir.exists():
-        dest_dir.mkdir()
-    shutil.copy(str(im), str(dest_dir / Path("fmaps.png")))
-
-    f_tr, y_tr, f_val, y_val, f_test, y_test = get_feature_vector_tr_split(encoder, tr_eps, tr_labels,val_eps,
-                                                                           val_labels,  test_eps, test_labels)
-    process = psutil.Process(os.getpid())
-    print(process.memory_info().rss / 2**30 , flush=True)  # in bytes
-
-    return f_tr, y_tr, f_val, y_val, f_test, y_test
-
-
 
 def run_probe(args):
-    print_memory()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print_memory("start memory")
     encoder = get_encoder(args)
-    print_memory()
-    f_tr, y_tr, f_val, y_val, f_test, y_test = get_probe_feature_vectors(args, encoder)
-    print_memory()
+    encoder.to(device)
+    print_memory("after encoder trained/oaded")
+    f_tr, f_val, f_test, y_tr, y_val, y_test = get_probe_data(args, device, encoder)
+
+    print_memory("after probe data loaded")
     compute_and_log_raw_quant_metrics(args, f_tr, y_tr, f_val, y_val,  f_test, y_test)
 
 
@@ -89,15 +57,30 @@ def get_encoder(args):
     else:
         assert False, "No known method specified! Don't know what {} is".format(args.method)
 
-    encoder.cpu()
     return encoder
 
-def get_feature_vector_tr_split(encoder, tr_eps, tr_labels,val_eps, val_labels,  test_eps, test_labels):
-    f_tr, y_tr = get_feature_vectors(encoder, tr_eps, tr_labels)
-    f_val, y_val = get_feature_vectors(encoder, val_eps, val_labels)
-    f_test, y_test = get_feature_vectors(encoder, test_eps, test_labels)
-    return f_tr, y_tr, f_val, y_val,  f_test, y_test
 
+def get_probe_data(args, device, encoder):
+    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = get_episodes(steps=args.probe_num_frames,
+                                                                                 env_name=args.env_name,
+                                                                                 seed=args.seed,
+                                                                                 num_processes=args.num_processes,
+                                                                                 num_frame_stack=args.num_frame_stack,
+                                                                                 downsample=not args.no_downsample,
+                                                                                 color=args.color,
+                                                                                 entropy_threshold=args.entropy_threshold,
+                                                                                 collect_mode=args.probe_collect_mode,
+                                                                                 train_mode="probe",
+                                                                                 checkpoint_index=args.checkpoint_index,
+                                                                                 min_episode_length=args.batch_size
+                                                                                 )
+
+    print_memory("After Probe Eps Loaded")
+    f_tr, f_val, f_test = encode_feature_vectors(encoder, device, tr_eps, val_eps, test_eps)
+    process = psutil.Process(os.getpid())
+    print(process.memory_info().rss / 2**30, flush=True)  # in bytes
+
+    return f_tr, f_val, f_test, tr_labels, val_labels, test_labels
 
 
 

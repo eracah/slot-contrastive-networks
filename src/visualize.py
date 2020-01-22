@@ -36,7 +36,7 @@ def get_grid_of_fmaps(encoder, frames, num_repeat):
 
 
 def superimpose_mask(xgrid, mask_grid):
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(figsize=[50,50])
     im1 = ax.imshow(xgrid, cmap=plt.cm.jet)
     im2 = ax.imshow(mask_grid, cmap=plt.cm.jet, alpha=0.7)
     ax.axis("off")
