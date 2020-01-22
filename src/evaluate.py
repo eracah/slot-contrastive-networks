@@ -23,9 +23,10 @@ from torch.optim import Adam
 
 
 def encode_feature_vectors(encoder, device, *frame_tensors):
+    encoder.to(device)
     zs = []
     for frame_tensor in frame_tensors:
-        x = frame_tensor.to(torch.float) / 255.
+        x = frame_tensor.to(torch.float).to(device) / 255.
         z = encoder(x).detach().to(device)
         zs.append(z)
     return zs
