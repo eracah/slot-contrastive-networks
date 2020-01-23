@@ -107,8 +107,8 @@ class AttentionProbeTrainer(object):
             attn_probe.train()
             for x, y in tr_dl:
                 x = x.float() / 255.
-                x.to(self.device)
-                y.to(self.device)
+                x = x.to(self.device)
+                y = y.to(self.device)
                 slots = self.encoder(x).detach()
                 opt.zero_grad()
                 pred, w = attn_probe(slots)
@@ -118,8 +118,8 @@ class AttentionProbeTrainer(object):
             attn_probe.eval()
             for x, y in val_dl:
                 x = x.float() / 255.
-                x.to(self.device)
-                y.to(self.device)
+                x = x.to(self.device)
+                y = y.to(self.device)
                 slots = self.encoder(x).detach()
                 pred, w = attn_probe(slots)
                 epoch_val_f1 = calculate_f1_score(pred.detach().cpu().numpy(), y.detach().cpu().numpy())
@@ -128,8 +128,8 @@ class AttentionProbeTrainer(object):
 
         for x, y in test_dl:
             x = x.float() / 255.
-            x.to(self.device)
-            y.to(self.device)
+            x = x.to(self.device)
+            y = y.to(self.device)
             slots = self.encoder(x).detach()
             pred, w = attn_probe(slots)
             test_f1 = calculate_f1_score(pred.detach().cpu().numpy(), y.detach().cpu().numpy())

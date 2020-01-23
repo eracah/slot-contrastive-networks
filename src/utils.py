@@ -43,11 +43,6 @@ def get_argparser():
     parser.add_argument('--method', type=str, default='nce',
                         choices=train_encoder_methods + probe_only_methods,
                         help='Method to use for training representations (default: nce')
-    parser.add_argument('--linear', action='store_true', default=True,
-                        help='Whether to use a linear classifier')
-    parser.add_argument('--use-multiple-predictors', action='store_true', default=False,
-                        help='Whether to use multiple linear classifiers in the contrastive loss')
-
     parser.add_argument('--lr', type=float, default=3e-4,
                         help='Learning Rate foe learning representations (default: 5e-4)')
     parser.add_argument('--batch-size', type=int, default=64,
@@ -62,6 +57,7 @@ def get_argparser():
                         help='Encoder type (Impala or Nature)')
     parser.add_argument('--feature-size', type=int, default=256,
                         help='Size of features')
+
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--color", action='store_true', default=True)
@@ -70,15 +66,17 @@ def get_argparser():
     parser.add_argument("--num-rew-evals", type=int, default=10)
     # rl-probe specific arguments
     parser.add_argument("--checkpoint-index", type=int, default=-1)
+
     parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
+                        default="random_agent")
+    parser.add_argument("--probe-collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
                         default="random_agent")
 
     # probe arguments
     parser.add_argument("--weights-path", type=str, default="None")
     parser.add_argument("--train-encoder", action='store_true', default=True)
     parser.add_argument('--probe-lr', type=float, default=3e-4)
-    parser.add_argument("--probe-collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
-                        default="random_agent")
+
     parser.add_argument('--num-runs', type=int, default=1)
     return parser
 
