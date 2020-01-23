@@ -71,12 +71,12 @@ x_tr, x_val, y_tr, y_val, x_test, y_test = get_episodes(steps=args.probe_num_fra
                                                          min_episode_length=args.batch_size
                                                          )
 
-for type_ in ["linear", "mlp"]:
-    attn_probe = AttentionProbeTrainer(encoder=encoder, epochs=args.epochs, patience=args.patience, lr=args.probe_lr, type=type)
+for probe_type in ["linear", "mlp"]:
+    attn_probe = AttentionProbeTrainer(encoder=encoder, epochs=args.epochs, patience=args.patience, lr=args.probe_lr, type=probe_type)
     scores, importances_df = attn_probe.train_test(x_tr, x_val, y_tr, y_val, x_test, y_test)
     imp_dict = {col: importances_df.values[:, i] for i, col in enumerate(importances_df.columns)}
-    log_metrics(imp_dict, prefix="%s_attn_probe_"%type, suffix="_weights")
-    log_metrics(scores, prefix="%sattn_probe_"%type, suffix="_f1")
+    log_metrics(imp_dict, prefix="%s_attn_probe_"%probe_type, suffix="_weights")
+    log_metrics(scores, prefix="%sattn_probe_"%probe_type, suffix="_f1")
 
 
 f1s = []
