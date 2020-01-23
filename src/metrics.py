@@ -54,8 +54,6 @@ def get_explicitness_for_every_slot_for_every_factor(f_tr, y_tr, f_val, y_val,  
         representation_len = sl_tr.shape[-1]
         test_acc, test_f1score = train_all_probes(encoder, sl_tr, sl_val,sl_test,y_tr, y_val, y_test, representation_len, args, wandb.run.dir)
 
-
-
         f1s.append(deepcopy(test_f1score))
 
     return pd.DataFrame(f1s)
@@ -80,14 +78,7 @@ def convert_slotwise_df_to_flat_dict(df):
     return dic
 
 
-def log_metrics(dic, prefix, suffix):
-    dic = prepend_prefix(dic, prefix)
-    dic = append_suffix(dic, suffix)
-    wandb.run.summary.update(dic)
 
-def postprocess_and_log_metrics(dic, prefix, suffix):
-    dic = postprocess_raw_metrics(dic)
-    log_metrics(dic, prefix, suffix)
 
 
 def compute_dci_d(slot_importances, explicitness_scores, weighted_by_explicitness=True):
@@ -97,24 +88,4 @@ def compute_dci_d(slot_importances, explicitness_scores, weighted_by_explicitnes
         dci_d = explicitness_scores * dci_d
     return dci_d
 
-def compute_category_avgs(metric_dict):
-    category_dict = {}
-    for category_name, category_keys in summary_key_dict.items():
-        category_values = [v for k, v in metric_dict.items() if k in category_keys]
-        if len(category_values) < 1:
-            continue
-        category_mean = np.mean(category_values)
-        category_dict[category_name + "_avg"] = category_mean
-    return category_dict
-
-
-def postprocess_raw_metrics(metric_dict):
-    overall_avg = compute_dict_average(metric_dict)
-    category_avgs_dict = compute_category_avgs(metric_dict)
-    avg_across_categories = compute_dict_average(category_avgs_dict)
-    metric_dict.update(category_avgs_dict)
-
-    metric_dict["overall_avg"] = overall_avg
-    metric_dict["across_categories_avg"] = avg_across_categories
-
-    return metric_dict
+d

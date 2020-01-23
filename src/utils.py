@@ -10,6 +10,8 @@ from atariari.benchmark.envs import get_vec_normalize
 from collections import defaultdict
 from pathlib import Path
 import psutil
+import wandb
+from atariari.benchmark.categorization import summary_key_dict
 # methods that need encoder trained before
 train_encoder_methods = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
 probe_only_methods = ["supervised", "random-cnn", "majority"]
@@ -107,24 +109,53 @@ def set_seeds(seed):
         torch.backends.cudnn.deterministic = True
 
 
-def calculate_accuracy(preds, y):
-    preds = preds >= 0.5
-    labels = y >= 0.5
-    acc = preds.eq(labels).sum().float() / labels.numel()
-    return acc
-
-
-def calculate_multiclass_f1_score(preds, labels):
-    preds = torch.argmax(preds, dim=1).detach().numpy()
-    labels = labels.numpy()
+def calculate_f1_score(logits, labels):
+    preds = np.argmax(logits, axis=1)
     f1score = compute_f1_score(labels, preds, average="weighted")
     return f1score
 
 
-def calculate_multiclass_accuracy(preds, labels):
-    preds = torch.argmax(preds, dim=1)
-    acc = float(torch.sum(torch.eq(labels, preds)).data) / labels.size(0)
-    return acc
+def calculate_accuracy(logits, labels, argmax=True):
+    if argmax:
+        preds = np.argmax(logits, axis=1)
+    else:
+        preds = logits
+    correct_or_not = (preds == labels).astype(int)
+    acc = np.mean(correct_or_not)
+    return acc, correct_or_not
+
+def log_metrics(dic, prefix, suffix):
+    dic = prepend_prefix(dic, prefix)
+    dic = append_suffix(dic, suffix)
+    wandb.run.summary.update(dic)
+
+def postprocess_and_log_metrics(dic, prefix, suffix):
+    dic = postprocess_raw_metrics(dic)
+    log_metrics(dic, prefix, suffix)
+
+
+def compute_category_avgs(metric_dict):
+    category_dict = {}
+    for category_name, category_keys in summary_key_dict.items():
+        category_values = [v for k, v in metric_dict.items() if k in category_keys]
+        if len(category_values) < 1:
+            continue
+        category_mean = np.mean(category_values)
+        category_dict[category_name + "_avg"] = category_mean
+    return category_dict
+
+
+def postprocess_raw_metrics(metric_dict):
+    overall_avg = compute_dict_average(metric_dict)
+    category_avgs_dict = compute_category_avgs(metric_dict)
+    avg_across_categories = compute_dict_average(category_avgs_dict)
+    metric_dict.update(category_avgs_dict)
+
+    metric_dict["overall_avg"] = overall_avg
+    metric_dict["across_categories_avg"] = avg_across_categories
+
+    return metric_dict
+
 
 
 def append_suffix(dictionary, suffix):
@@ -157,14 +188,6 @@ def save_model(model, envs, save_dir, model_name, use_cuda):
 
 
 
-
-
-def generate_video():
-    os.chdir("act_maps")
-    subprocess.call([
-        'ffmpeg', '-framerate', '8', '-i', 'file%02d.png', '-r', '30', '-pix_fmt', 'yuv420p',
-        'video_name.mp4'
-    ])
 
 class appendabledict(defaultdict):
     def __init__(self, type_=list, *args, **kwargs):
