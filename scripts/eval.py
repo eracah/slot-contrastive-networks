@@ -1,4 +1,4 @@
-from src.utils import  print_memory
+from src.utils import print_memory
 from src.encoders import SlotEncoder, SlotIWrapper
 from atariari.benchmark.episodes import get_episodes
 from copy import deepcopy

@@ -108,6 +108,8 @@ class SCNTrainer(object):
         iterations = 0
         t0 = time.time()
         for x, x_pos in dataloader:
+            x = x.to(self.device)
+            x_pos = x_pos.to(self.device)
             slots_t, slots_pos = self.encoder(x), self.encoder(x_pos)
 
             loss1, acc1_correct_or_nots = self.compute_loss1(slots_t, slots_pos)
