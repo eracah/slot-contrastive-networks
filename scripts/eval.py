@@ -52,7 +52,7 @@ if __name__ == "__main__":
     train_args = train_json_obj["args"]
 
     train_parser = get_train_argparser()
-    train_args = train_parser.parse_args(train_args)
+    train_args, unknown = train_parser.parse_known_args(train_args)
 
     for k, v in vars(train_args).items():
         if k not in args:
