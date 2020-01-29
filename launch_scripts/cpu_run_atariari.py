@@ -1,7 +1,7 @@
 import subprocess
 import sys
 base_cmd = "sbatch"
-ss= "launch_scripts/mila_cluster.sl"
+ss= "launch_scripts/cpu_mila_cluster.sl"
 module = "scripts.run_probe"
 args = [base_cmd, ss, module]
 args.extend(sys.argv[1:])

@@ -1,11 +1,10 @@
 #!/bin/bash
 
 
-#SBATCH --gres=gpu:1
 #SBATCH --mem=64G
-#SBATCH -c 8
-#SBATXH -x rtx6
-#SBATCH --time=16:00:00
+#SBATCH -c 4
+#SBATCH -x rtx6
+#SBATCH --time=48:00:00
 #SBATCH -o /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out  # Write the log on tmp1
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
 
