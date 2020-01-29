@@ -34,7 +34,7 @@ if __name__ == "__main__":
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--train-run-parent-path", type=str, default=".")
     parser.add_argument("--train-run-dir", type=str)
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
 
 
 
