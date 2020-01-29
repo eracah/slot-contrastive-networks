@@ -18,11 +18,20 @@
 
 # 3. Launch your job, tell it to save the model in $SLURM_TMPDIR
 #    and look for the dataset into $SLURM_TMPDIR
-echo $1
-export module_name=$1
-shift
-echo $module_name
-python -m $module_name  $@ --run-dir $SLURM_TMPDIR --final-dir /network/tmp1/racaheva/coors/wandb
-
-# 4. Copy whatever you want to save on $SCRATCH
+python train.py $@ --run-dir $SLURM_TMPDIR --final-dir /network/tmp1/racaheva/coors/wandb
 cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
+for arg in "$@"
+do
+    if [ "$arg" != "--eval_args" ]
+    then
+      shift
+    else
+      shift
+      echo $@
+      break
+    fi
+done
+python eval.py $@ --run-dir $SLURM_TMPDIR/eval_runs --train-run-dir $SLURM_TMPDIR/wandb
+cp -r  $SLURM_TMPDIR/eval_runs/wandb/* /network/tmp1/racaheva/coors/wandb
+
+

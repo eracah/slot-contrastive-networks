@@ -1,1 +1,1 @@
-bash launch_scripts/mila_cluster.sl scripts.run_probe --probe-collect-mode random_agent --probe-num-frames 2000 --num-frames 4000 --loss1-coeff 8 --patience 1 --run-dir ./dood --slot-len 64 --env-name MsPacmanNoFrameskip-v4 --epochs 3  --method $1 --final-dir ./final
+bash launch_scripts/mila_cluster.sl  --method scn --collect-mode random_agent --num-frames 2000 --batch-size 32 --patience 1 --epochs 1 --env-name FreewayNoFrameskip-v4 --eval_args --collect-mode random_agent --num-frames 2000 --patience 1  --batch-size 32 --epochs 1

@@ -43,7 +43,7 @@ def get_argparser():
 
 if __name__ == "__main__":
     parser = get_argparser()
-    args = parser.parse_args()
+    args, unknown = parser.parse_known_args()
     args.num_channels = get_channels(args)
     wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["train"])
     config = {}

@@ -4,6 +4,8 @@ from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 import pandas as pd
 from src.utils import calculate_f1_score
+import sys
+import numpy as np
 """Usage:
  tr_eps.extend(val_eps)
  tr_labels.extend(val_labels)
@@ -87,7 +89,7 @@ class AttentionProbeTrainer(object):
 
         attn_probe.to(self.device)
         opt = torch.optim.Adam(list(attn_probe.parameters()), lr=self.lr)
-        early_stopper = EarlyStopping(patience=self.patience, verbose=False)
+        #early_stopper = EarlyStopping(patience=self.patience, verbose=False)
         tr_ds, val_ds, test_ds = TensorDataset(x_tr, yt), TensorDataset(x_val, yv), TensorDataset(x_test, yte)
         tr_dl, val_dl, test_dl = DataLoader(tr_ds, batch_size=self.batch_size, shuffle=True),\
                                  DataLoader(val_ds,batch_size=self.batch_size, shuffle=True), \
@@ -95,7 +97,8 @@ class AttentionProbeTrainer(object):
 
 
         epoch = 0
-        while (not early_stopper.early_stop) and epoch < self.epochs:
+        while epoch < self.epochs:
+            losses = []
             attn_probe.train()
             for x, y in tr_dl:
                 x = x.float() / 255.
@@ -107,15 +110,21 @@ class AttentionProbeTrainer(object):
                 loss = nn.CrossEntropyLoss()(pred, y.long())
                 loss.backward()
                 opt.step()
+                losses.append(loss.detach().cpu().numpy())
+            sys.stderr.write("Epoch {}:\n".format(epoch))
+            sys.stderr.write("\t Train Loss {}:\n".format(np.mean(losses)))
+
             attn_probe.eval()
+            losses = []
             for x, y in val_dl:
                 x = x.float() / 255.
                 x = x.to(self.device)
                 y = y.to(self.device)
                 slots = self.encoder(x).detach()
                 pred, w = attn_probe(slots)
-                epoch_val_f1 = calculate_f1_score(pred.detach().cpu().numpy(), y.detach().cpu().numpy())
-            early_stopper(epoch_val_f1, attn_probe)
+                loss = nn.CrossEntropyLoss()(pred, y.long())
+                losses.append(loss.detach().cpu().numpy())
+            sys.stderr.write("\t Val Loss {}:\n".format(np.mean(losses)))
             epoch += 1
 
         for x, y in test_dl:
