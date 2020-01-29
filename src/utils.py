@@ -12,73 +12,87 @@ from pathlib import Path
 import psutil
 import wandb
 from atariari.benchmark.categorization import summary_key_dict
+from scipy.stats import entropy
 # methods that need encoder trained before
-train_encoder_methods = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
-probe_only_methods = ["supervised", "random-cnn", "majority"]
-
-
+ablations = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
+baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 
 
 def get_argparser():
     parser = argparse.ArgumentParser()
+
+    # train
     parser.add_argument("--run-dir", type=str, default=".")
     parser.add_argument("--final-dir", type=str, default=".")
-    parser.add_argument("--num_slots", type=int, default=8)
-    parser.add_argument("--slot-len", type=int, default=256)
-    parser.add_argument("--fmap-num", default="f7")
-    parser.add_argument("--loss1-coeff", type=int, default=1)
-    parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',
-                        help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
-    parser.add_argument('--num-frame-stack', type=int, default=1,
-                        help='Number of frames to stack for a state')
-    parser.add_argument('--no-downsample', action='store_true', default=True,
-                        help='Whether to use a linear classifier')
-    parser.add_argument('--num-frames', type=int, default=100000,
-                        help='Number of steps to pretrain representations (default: 100000)')
-    parser.add_argument('--probe-num-frames', type=int, default=50000,
-                        help='Number of steps to train probes (default: 30000 )')
 
-    parser.add_argument('--num-processes', type=int, default=8,
-                        help='Number of parallel environments to collect samples from (default: 8)')
-    parser.add_argument('--method', type=str, default='nce',
-                        choices=train_encoder_methods + probe_only_methods,
-                        help='Method to use for training representations (default: nce')
-    parser.add_argument('--lr', type=float, default=3e-4,
-                        help='Learning Rate foe learning representations (default: 5e-4)')
-    parser.add_argument('--batch-size', type=int, default=64,
-                        help='Mini-Batch Size (default: 64)')
-    parser.add_argument('--epochs', type=int, default=100,
-                        help='Number of epochs for  (default: 100)')
-    parser.add_argument('--cuda-id', type=int, default=0,
-                        help='CUDA device index')
-    parser.add_argument('--seed', type=int, default=42,
-                        help='Random seed to use')
-    parser.add_argument('--encoder-type', type=str, default="Nature", choices=["Impala", "Nature"],
-                        help='Encoder type (Impala or Nature)')
-    parser.add_argument('--feature-size', type=int, default=256,
-                        help='Size of features')
+    parser.add_argument('--num-frames', type=int, default=100000, help='Number of steps to pretrain representations (default: 100000)')
+    parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
+    parser.add_argument('--num-processes', type=int, default=8, help='Number of parallel environments to collect samples from (default: 8)')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
+
+
+    parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
+    parser.add_argument('--num-frame-stack', type=int, default=1, help='Number of frames to stack for a state')
+    parser.add_argument('--no-downsample', action='store_true', default=True, help='Whether to use a linear classifier')
+    parser.add_argument("--color", action='store_true', default=True)
+    parser.add_argument("--checkpoint-index", type=int, default=-1)
+    parser.add_argument("--entropy-threshold", type=float, default=0.6)
+
+
+    #eval
+    parser.add_argument('--probe-num-frames', type=int, default=50000, help='Number of steps to train probes (default: 30000 )')
+    parser.add_argument("--probe-collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
+    parser.add_argument('--num-processes', type=int, default=8, help='Number of parallel environments to collect samples from (default: 8)')
+    parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
+
+
+    parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
+    parser.add_argument('--num-frame-stack', type=int, default=1, help='Number of frames to stack for a state')
+    parser.add_argument('--no-downsample', action='store_true', default=True, help='Whether to use a linear classifier')
+    parser.add_argument("--color", action='store_true', default=True)
+    parser.add_argument("--checkpoint-index", type=int, default=-1)
+    parser.add_argument("--entropy-threshold", type=float, default=0.6)
+
+
+
+    parser.add_argument('--method', type=str, default='infonce', choices=ablations + baselines, help='Method to use for training representations (default: nce')
+    parser.add_argument("--end-with-relu", action='store_true', default=False)
+    parser.add_argument('--encoder-type', type=str, default="Nature", choices=["stdim", "cswm"], help='Encoder type stim or cswm')
+    parser.add_argument('--feature-size', type=int, default=256,help='Size of features')
+
+    parser.add_argument("--num_slots", type=int, default=8)
+    parser.add_argument("--slot-len", type=int, default=64)
+    parser.add_argument("--fmap-num", default="f7")
+
+
+
+
+
 
     parser.add_argument("--patience", type=int, default=15)
-    parser.add_argument("--entropy-threshold", type=float, default=0.6)
-    parser.add_argument("--color", action='store_true', default=True)
-    parser.add_argument("--end-with-relu", action='store_true', default=False)
-    parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
-    parser.add_argument("--num-rew-evals", type=int, default=10)
-    # rl-probe specific arguments
-    parser.add_argument("--checkpoint-index", type=int, default=-1)
-
-    parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
-                        default="random_agent")
-    parser.add_argument("--probe-collect-mode", type=str, choices=["random_agent", "pretrained_ppo"],
-                        default="random_agent")
-
-    # probe arguments
-    parser.add_argument("--weights-path", type=str, default="None")
-    parser.add_argument("--train-encoder", action='store_true', default=True)
+    parser.add_argument('--lr', type=float, default=3e-4, help='Learning Rate foe learning representations (default: 5e-4)')
+    parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
+    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs for  (default: 100)')
     parser.add_argument('--probe-lr', type=float, default=3e-4)
 
-    parser.add_argument('--num-runs', type=int, default=1)
+
+
+
+
+    parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
+
+
+
     return parser
+
+def get_channels(args):
+    if args.color and args.num_frame_stack == 1:
+        num_channels = 3
+    elif not args.color:
+        num_channels = args.num_frame_stack
+    else:
+        assert False, "undefined behavior for color and frame stack > 1! "
+    return num_channels
 
 def print_memory(name=""):
     process = psutil.Process(os.getpid())
@@ -130,6 +144,13 @@ def log_metrics(dic, prefix, suffix):
 def postprocess_and_log_metrics(dic, prefix, suffix):
     dic = postprocess_raw_metrics(dic)
     log_metrics(dic, prefix, suffix)
+
+def compute_dci_d(slot_importances, explicitness_scores, weighted_by_explicitness=True):
+    num_factors = len(slot_importances.keys())
+    dci_d = 1 - entropy(slot_importances, base=num_factors)
+    if weighted_by_explicitness:
+        dci_d = explicitness_scores * dci_d
+    return dci_d
 
 
 def compute_category_avgs(metric_dict):
@@ -274,7 +295,7 @@ class appendabledict(defaultdict):
 class EarlyStopping(object):
     """Early stops the training if validation loss doesn't improve after a given patience."""
 
-    def __init__(self, patience=7, verbose=False, savedir='.', name=""):
+    def __init__(self, patience=7, verbose=False, name=""):
         """
         Args:
             patience (int): How long to wait after last time validation loss improved.
@@ -289,8 +310,6 @@ class EarlyStopping(object):
         self.early_stop = False
         self.val_acc_max = 0.
         self.name = name
-        self.savedir = savedir
-        Path(self.savedir).mkdir(parents=True, exist_ok=True)
 
 
     def __call__(self, val_acc, model):
@@ -299,7 +318,6 @@ class EarlyStopping(object):
 
         if self.best_score is None:
             self.best_score = score
-            self.save_checkpoint(val_acc, model)
         elif score <= self.best_score:
             self.counter += 1
             print(f'EarlyStopping for {self.name} counter: {self.counter} out of {self.patience}')
@@ -309,18 +327,7 @@ class EarlyStopping(object):
 
         else:
             self.best_score = score
-            self.save_checkpoint(val_acc, model)
             self.counter = 0
 
-    def save_checkpoint(self, val_acc, model):
-        '''Saves model when validation loss decrease.'''
-        if self.verbose:
-            print(
-                f'Validation accuracy increased for {self.name}  ({self.val_acc_max:.6f} --> {val_acc:.6f}).  Saving model ...')
-
-        save_dir = self.savedir
-
-        torch.save(model.state_dict(), save_dir + "/" + self.name + ".pt")
-        self.val_acc_max = val_acc
 
 

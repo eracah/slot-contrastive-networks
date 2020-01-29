@@ -1,13 +1,5 @@
 import torch
 from src.utils import EarlyStopping
-from copy import deepcopy
-import numpy as np
-from sklearn.linear_model import SGDClassifier
-from sklearn.metrics import f1_score as compute_f1_score
-import warnings
-
-from sklearn.ensemble import GradientBoostingClassifier
-from sklearn.neural_network import MLPClassifier
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 import pandas as pd

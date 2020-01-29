@@ -1,8 +1,8 @@
-# some of this code adapted from https://github.com/mila-iqia/atari-representation-learning
+# some of this code adapted from https://github.com/mila-iqia/atari-representation-learning and https://github.com/tkipf/c-swm
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-
+import src.cswm_utils as utils
 
 def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
@@ -12,40 +12,6 @@ def init(module, weight_init, bias_init, gain=1):
 class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
-
-
-class Conv2dSame(torch.nn.Module):
-    def __init__(self, in_channels, out_channels, kernel_size, bias=True, padding_layer=nn.ReflectionPad2d):
-        super().__init__()
-        ka = kernel_size // 2
-        kb = ka - 1 if kernel_size % 2 == 0 else ka
-        self.net = torch.nn.Sequential(
-            padding_layer((ka, kb, ka, kb)),
-            torch.nn.Conv2d(in_channels, out_channels, kernel_size, bias=bias)
-        )
-
-    def forward(self, x):
-        return self.net(x)
-
-
-class ResidualBlock(nn.Module):
-    def __init__(self, in_channels, out_channels):
-        super(ResidualBlock, self).__init__()
-        self.block = nn.Sequential(
-            Conv2dSame(in_channels, out_channels, 3),
-            nn.ReLU(),
-            Conv2dSame(in_channels, out_channels, 3)
-        )
-
-    def forward(self, x):
-        residual = x
-        out = self.block(x)
-        out += residual
-        out = F.relu(out)
-        return out
-
-
-
 
 class NatureCNN(nn.Module):
     def __init__(self, input_channels, args):
@@ -176,12 +142,98 @@ class SlotIWrapper(nn.Module):
         slot_i = slots[:,self.i]
         return slot_i
 
-class ConcatenateWrapper(nn.Module):
-    def __init__(self, slot_encoder):
-        super().__init__()
-        self.slot_encoder = slot_encoder
 
-    def forward(self,x):
-        slots = self.slot_encoder(x)
-        return Flatten()(slots)
+class EncoderCNNSmall(nn.Module):
+    """CNN encoder, maps observation to obj-specific feature maps."""
+
+    def __init__(self, input_dim, hidden_dim, num_objects, act_fn='sigmoid',
+                 act_fn_hid='relu'):
+        super(EncoderCNNSmall, self).__init__()
+        self.cnn1 = nn.Conv2d(
+            input_dim, hidden_dim, (10, 10), stride=10)
+        self.cnn2 = nn.Conv2d(hidden_dim, num_objects, (1, 1), stride=1)
+        self.ln1 = nn.BatchNorm2d(hidden_dim)
+        self.act1 = utils.get_act_fn(act_fn_hid)
+        self.act2 = utils.get_act_fn(act_fn)
+
+    def forward(self, obs):
+        h = self.act1(self.ln1(self.cnn1(obs)))
+        return self.act2(self.cnn2(h))
+
+
+class EncoderCNNMedium(nn.Module):
+    """CNN encoder, maps observation to obj-specific feature maps."""
+
+    def __init__(self, input_dim, hidden_dim, num_objects, act_fn='sigmoid',
+                 act_fn_hid='leaky_relu'):
+        super(EncoderCNNMedium, self).__init__()
+
+        self.cnn1 = nn.Conv2d(
+            input_dim, hidden_dim, (9, 9), padding=4)
+        self.act1 = utils.get_act_fn(act_fn_hid)
+        self.ln1 = nn.BatchNorm2d(hidden_dim)
+
+        self.cnn2 = nn.Conv2d(
+            hidden_dim, num_objects, (5, 5), stride=5)
+        self.act2 = utils.get_act_fn(act_fn)
+
+    def forward(self, obs):
+        h = self.act1(self.ln1(self.cnn1(obs)))
+        h = self.act2(self.cnn2(h))
+        return h
+
+
+class EncoderCNNLarge(nn.Module):
+    """CNN encoder, maps observation to obj-specific feature maps."""
+
+    def __init__(self, input_dim, hidden_dim, num_objects, act_fn='sigmoid',
+                 act_fn_hid='relu'):
+        super(EncoderCNNLarge, self).__init__()
+
+        self.cnn1 = nn.Conv2d(input_dim, hidden_dim, (3, 3), padding=1)
+        self.act1 = utils.get_act_fn(act_fn_hid)
+        self.ln1 = nn.BatchNorm2d(hidden_dim)
+
+        self.cnn2 = nn.Conv2d(hidden_dim, hidden_dim, (3, 3), padding=1)
+        self.act2 = utils.get_act_fn(act_fn_hid)
+        self.ln2 = nn.BatchNorm2d(hidden_dim)
+
+        self.cnn3 = nn.Conv2d(hidden_dim, hidden_dim, (3, 3), padding=1)
+        self.act3 = utils.get_act_fn(act_fn_hid)
+        self.ln3 = nn.BatchNorm2d(hidden_dim)
+
+        self.cnn4 = nn.Conv2d(hidden_dim, num_objects, (3, 3), padding=1)
+        self.act4 = utils.get_act_fn(act_fn)
+
+    def forward(self, obs):
+        h = self.act1(self.ln1(self.cnn1(obs)))
+        h = self.act2(self.ln2(self.cnn2(h)))
+        h = self.act3(self.ln3(self.cnn3(h)))
+        return self.act4(self.cnn4(h))
+
+
+class EncoderMLP(nn.Module):
+    """MLP encoder, maps observation to latent state."""
+
+    def __init__(self, input_dim, output_dim, hidden_dim, num_objects,
+                 act_fn='relu'):
+        super(EncoderMLP, self).__init__()
+
+        self.num_objects = num_objects
+        self.input_dim = input_dim
+
+        self.fc1 = nn.Linear(self.input_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, output_dim)
+
+        self.ln = nn.LayerNorm(hidden_dim)
+
+        self.act1 = utils.get_act_fn(act_fn)
+        self.act2 = utils.get_act_fn(act_fn)
+
+    def forward(self, ins):
+        h_flat = ins.view(-1, self.num_objects, self.input_dim)
+        h = self.act1(self.fc1(h_flat))
+        h = self.act2(self.ln(self.fc2(h)))
+        return self.fc3(h)
 

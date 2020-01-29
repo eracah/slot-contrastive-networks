@@ -1,18 +1,15 @@
 import torch
 import torch.nn as nn
 import numpy as np
-from torch.utils.data import RandomSampler, BatchSampler
-from src.trainer import Trainer
-from src.utils import EarlyStopping, appendabledict, prepend_prefix, append_suffix
+from src.utils import EarlyStopping, appendabledict, append_suffix
 from src.encoders import SlotEncoder
-from .evaluate import calculate_accuracy
+from src.utils import calculate_accuracy
+from torch.utils.data import DataLoader, TensorDataset
 
-import time
 
-
-class SupervisedTrainer(Trainer):
+class SupervisedTrainer():
     def __init__(self, args, device=torch.device('cpu'), wandb=None):
-        super().__init__(wandb, device)
+        super().__init__()
 
         self.args = args
         self.wandb = wandb
@@ -27,11 +24,10 @@ class SupervisedTrainer(Trainer):
 
     def create_slot_classifiers(self, sample_label):
         num_state_vars = len(sample_label)
-        self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, name="sup_loss",
-                                           savedir=self.wandb.run.dir + "/models")
+        self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, name="sup_loss")
 
 
-        self.encoder = SlotEncoder(self.args.obs_space[0],self.args.slot_len, num_slots=num_state_vars, args= self.args).to(self.device)
+        self.encoder = SlotEncoder(self.args.num_channels,self.args.slot_len, num_slots=num_state_vars, args= self.args).to(self.device)
 
         self.slot_fcs = []
         self.slot_fc_params = []
@@ -43,46 +39,32 @@ class SupervisedTrainer(Trainer):
         self.optimizer = torch.optim.Adam(list(self.slot_fc_params) + list(self.encoder.parameters()),
                                           lr=self.args.lr, eps=1e-5)
 
+    def generate_batch(self, frames, label_dict, batch_size):
+        label_values = [torch.tensor(labels) for labels in list(label_dict.values()) ]
+        ds = TensorDataset(frames, *label_values)
+        dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
+        for x, *ys in dl:
+            labels = [y.long().to(self.device) for y in ys]
+            yield x.float().to(self.device) / 255., labels
 
-    def generate_batch(self, episodes, episode_labels):
-        total_steps = sum([len(e) for e in episodes])
-        assert total_steps > self.batch_size
-        print('Total Steps: {}'.format(total_steps))
-        # Episode sampler
-        # Sample `num_samples` episodes then batchify them with `self.batch_size` episodes per batch
-        sampler = BatchSampler(RandomSampler(range(len(episodes)),
-                                             replacement=True, num_samples=total_steps),
-                               self.batch_size, drop_last=True)
-
-        for indices in sampler:
-            episodes_batch = [episodes[x] for x in indices]
-            episode_labels_batch = [episode_labels[x] for x in indices]
-            xs, labels = [], appendabledict()
-            for ep_ind, episode in enumerate(episodes_batch):
-                # Get one sample from this episode
-                t = np.random.randint(len(episode))
-                xs.append(episode[t])
-                labels.append_update(episode_labels_batch[ep_ind][t])
-            yield torch.stack(xs).to(self.device) / 255., labels
-
-    def do_one_epoch(self, episodes, labels):
+    def do_one_epoch(self, episodes, labels_dict):
+        label_keys = list(labels_dict.keys())
         mode = "train" if self.encoder.training else "val"
         losses = []
         accs = []
         loss_slots = appendabledict()
         acc_slots = appendabledict()
-        data_generator = self.generate_batch(episodes, labels)
-        for iteration, (x, label) in enumerate(data_generator):
+        data_generator = self.generate_batch(episodes, labels_dict, batch_size=self.batch_size)
+        for x, labels in data_generator:
             loss = 0.
             self.optimizer.zero_grad()
             slots = self.encoder(x)
-            label_keys = list(label.keys())
             for i in range(self.encoder.num_slots):
                 label_name = label_keys[i]
                 slot_i = slots[:, i]
                 slot_fc = self.slot_fcs[i]
                 logits = slot_fc(slot_i)
-                ground_truth = torch.tensor(label[label_name]).long().to(self.device)
+                ground_truth = labels[i]
                 loss_i = nn.CrossEntropyLoss()(logits, ground_truth)
                 loss += loss_i
                 _, acc_binary = calculate_accuracy(logits.detach().cpu().numpy(), ground_truth.detach().cpu().numpy())
@@ -110,8 +92,7 @@ class SupervisedTrainer(Trainer):
         return epoch_loss, epoch_acc, loss_slots, acc_slots
 
     def train(self, tr_eps, tr_labels, val_eps, val_labels):
-        sample_label = tr_labels[0][0]
-        self.create_slot_classifiers(sample_label)
+        self.create_slot_classifiers(tr_labels)
         for epoch in range(self.epochs):
             print("Epoch {}".format(epoch))
             self.encoder.train()
