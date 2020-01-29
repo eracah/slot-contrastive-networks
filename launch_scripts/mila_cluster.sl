@@ -18,7 +18,7 @@
 
 # 3. Launch your job, tell it to save the model in $SLURM_TMPDIR
 #    and look for the dataset into $SLURM_TMPDIR
-python train.py $@ --run-dir $SLURM_TMPDIR --final-dir /network/tmp1/racaheva/coors/wandb
+python -m scripts.train $@ --run-dir $SLURM_TMPDIR --final-dir /network/tmp1/racaheva/coors/wandb
 cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
 for arg in "$@"
 do
@@ -31,7 +31,7 @@ do
       break
     fi
 done
-python eval.py $@ --run-dir $SLURM_TMPDIR/eval_runs --train-run-dir $SLURM_TMPDIR/wandb
+python -m scripts.eval $@ --run-dir $SLURM_TMPDIR/eval_runs --train-run-parent-path $SLURM_TMPDIR/wandb
 cp -r  $SLURM_TMPDIR/eval_runs/wandb/* /network/tmp1/racaheva/coors/wandb
 
 
