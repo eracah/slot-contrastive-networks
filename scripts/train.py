@@ -1,12 +1,8 @@
-from atariari.benchmark.episodes import get_episodes
-from src.utils import  append_suffix, print_memory, get_channels
-import shutil
 import argparse
 import os
 import torch
-from pathlib import Path
 import wandb
-from src.encoders import EncoderCNNMedium, NatureFMapEncoder, NaureCNNObjExtractor, NatureCNN, EncoderMLP
+from src.encoders import EncoderCNNMedium, NaureCNNObjExtractor, NatureCNN, EncoderMLP
 from src.data.stdim_dataloader import get_stdim_dataloader, get_stdim_eval_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 import numpy as np
@@ -21,8 +17,7 @@ baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 def get_argparser():
     parser = argparse.ArgumentParser()
     # train
-    parser.add_argument("--run-dir", type=str, default=".")
-    parser.add_argument("--final-dir", type=str, default=".")
+    parser.add_argument("--run-dir", type=str, default="./temp")
     parser.add_argument('--num-frames', type=int, default=100000,  help='Number of steps to pretrain representations (default: 100000)')
     parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
     parser.add_argument('--num-processes', type=int, default=8, help='Number of parallel environments to collect samples from (default: 8)')
@@ -35,7 +30,6 @@ def get_argparser():
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument('--method', type=str, default='scn', choices= baselines + ["scn"], help='Method to use for training representations (default: scn')
     parser.add_argument('--ablation', type=str, default="none", choices=ablations, help='Ablation of scn (default: scn')
-    parser.add_argument('--encoder-type', type=str, default="stdim", choices=["stdim_small", "stdim", "cswm_small", "cswm_medium", "cswm_large"], help='Encoder type stim or cswm')
     parser.add_argument('--embedding-dim', type=int, default=256, help='Dimensionality of embedding.')
     parser.add_argument("--num_slots", type=int, default=8)
     parser.add_argument("--slot-len", type=int, default=32)
@@ -48,19 +42,15 @@ def get_argparser():
     parser.add_argument("--regime", type=str, default="stdim", choices=["stdim", "cswm"],
                         help="whether to use the encoder and dataloader from stdim or from cswm")
     parser.add_argument('--hidden-dim', type=int, default=512, help='Number of hidden units in transition MLP.')
-
     parser.add_argument('--log-interval', type=int, default=20,
                         help='How many batches to wait before logging'
                              'training status.')
-
     parser.add_argument('--action-dim', type=int, default=4,
                         help='Dimensionality of action space.')
-    #cswm args
     parser.add_argument('--sigma', type=float, default=0.5,
                         help='Energy scale.')
     parser.add_argument('--hinge', type=float, default=1.,
                         help='Hinge threshold parameter.')
-
     parser.add_argument('--ignore-action', action='store_true', default=False,
                         help='Ignore action in GNN transition model.')
     parser.add_argument('--copy-action', action='store_true', default=False,
@@ -116,9 +106,8 @@ def get_encoder(args, sample_frame):
                                   hidden_dim=args.hidden_dim,
                                   num_objects=args.num_slots)
             encoder = nn.Sequential(obj_extractor, slot_mlp)
-    if args.regime == "cswm":
+    elif args.regime == "cswm":
         width_height = np.asarray(sample_frame.shape[2:])
-
         obj_extractor = EncoderCNNMedium(input_dim=input_channels,
                                         hidden_dim=args.hidden_dim // 16,
                                         num_objects=args.num_slots)
@@ -127,6 +116,8 @@ def get_encoder(args, sample_frame):
                                   hidden_dim=args.hidden_dim,
                                   num_objects=args.num_slots)
         encoder = nn.Sequential(obj_extractor, slot_mlp)
+    else:
+        assert False
     return encoder
 
 
@@ -175,9 +166,6 @@ if __name__ == "__main__":
                                representation_len=args.embedding_dim)
         trainer.train(tr_dl, val_dl)
         test_acc, test_f1 = trainer.test(test_dl)
-        # #test_acc_slots = append_suffix(test_acc_slots, "_supervised_test_acc")
-        # wandb.run.summary.update({"supervised_overall_test_acc": test_acc})
-        # #wandb.run.summary.update(test_acc_slots)
 
     else:
         tr_loader, val_loader = dataloaders
@@ -234,7 +222,3 @@ if __name__ == "__main__":
                 best_loss = val_loss
                 torch.save(model.encoder.state_dict(), wandb.run.dir + "/encoder.pt")
 
-
-wrd = Path(wandb.run.dir)
-fd = Path(args.final_dir)
-shutil.copytree(wrd.absolute(), fd.absolute() / wrd.stem)

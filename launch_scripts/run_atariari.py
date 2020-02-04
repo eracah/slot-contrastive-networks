@@ -1,7 +1,17 @@
 import subprocess
 import sys
+import argparse
+
+parser = argparse.ArgumentParser()
+parser.add_argument("--unkillable", action='store_true', default=False)
+args = parser.parse_args()
 base_cmd = "sbatch"
-ss= "launch_scripts/mila_cluster.sl"
+if args.unkillable:
+    file = "unkillable_mila_cluster.sl"
+else:
+    file = "mila_cluster.sl"
+ss= "launch_scripts/" + file
+
 # module = "scripts.run_probe"
 args = [base_cmd, ss]
 args.extend(sys.argv[1:])
@@ -29,7 +39,6 @@ envs = ['asteroids',
 'video_pinball',
 'yars_revenge']
 
-
 suffix = "NoFrameskip-v4"
 for i,env in enumerate(envs):
 
@@ -40,7 +49,6 @@ for i,env in enumerate(envs):
     sargs.append(name + suffix)
 
     sargs.extend(["--wandb-proj", "coors-production"])
-    sargs.extend(["--eval_args", "--wandb-proj", "coors-production"])
 
     print(" ".join(sargs))
     subprocess.run(sargs)
