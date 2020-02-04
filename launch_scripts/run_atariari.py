@@ -40,6 +40,7 @@ for i,env in enumerate(envs):
     sargs.append(name + suffix)
 
     sargs.extend(["--wandb-proj", "coors-production"])
+    sargs.extend(["--eval_args", "--wandb-proj", "coors-production"])
 
     print(" ".join(sargs))
     subprocess.run(sargs)

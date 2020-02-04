@@ -1,4 +1,4 @@
-import utils
+import src.cswm_utils as utils
 
 import numpy as np
 
@@ -17,11 +17,12 @@ class ContrastiveSWM(nn.Module):
         num_objects: Number of object slots.
     """
 
-    def __init__(self, embedding_dim, input_dims, hidden_dim, action_dim,
-                 num_objects, hinge=1., sigma=0.5, encoder='large',
+    def __init__(self, encoder, embedding_dim, hidden_dim, action_dim,
+                 num_objects, hinge=1., sigma=0.5,
                  ignore_action=False, copy_action=False):
         super(ContrastiveSWM, self).__init__()
 
+        self.encoder = encoder
         self.hidden_dim = hidden_dim
         self.embedding_dim = embedding_dim
         self.action_dim = action_dim
@@ -34,36 +35,8 @@ class ContrastiveSWM(nn.Module):
         self.pos_loss = 0
         self.neg_loss = 0
 
-        num_channels = input_dims[0]
-        width_height = input_dims[1:]
+        # width_height = input_dims[1:]
 
-        if encoder == 'small':
-            self.obj_extractor = EncoderCNNSmall(
-                input_dim=num_channels,
-                hidden_dim=hidden_dim // 16,
-                num_objects=num_objects)
-            # CNN image size changes
-            width_height = np.array(width_height)
-            width_height = width_height // 10
-        elif encoder == 'medium':
-            self.obj_extractor = EncoderCNNMedium(
-                input_dim=num_channels,
-                hidden_dim=hidden_dim // 16,
-                num_objects=num_objects)
-            # CNN image size changes
-            width_height = np.array(width_height)
-            width_height = width_height // 5
-        elif encoder == 'large':
-            self.obj_extractor = EncoderCNNLarge(
-                input_dim=num_channels,
-                hidden_dim=hidden_dim // 16,
-                num_objects=num_objects)
-
-        self.obj_encoder = EncoderMLP(
-            input_dim=np.prod(width_height),
-            hidden_dim=hidden_dim,
-            output_dim=embedding_dim,
-            num_objects=num_objects)
 
         self.transition_model = TransitionGNN(
             input_dim=embedding_dim,
@@ -73,8 +46,8 @@ class ContrastiveSWM(nn.Module):
             ignore_action=ignore_action,
             copy_action=copy_action)
 
-        self.width = width_height[0]
-        self.height = width_height[1]
+        # self.width = width_height[0]
+        # self.height = width_height[1]
 
     def energy(self, state, action, next_state, no_trans=False):
         """Energy function based on normalized squared L2 norm."""
@@ -92,13 +65,10 @@ class ContrastiveSWM(nn.Module):
     def transition_loss(self, state, action, next_state):
         return self.energy(state, action, next_state).mean()
 
-    def contrastive_loss(self, obs, action, next_obs):
+    def calc_loss(self, obs, action, next_obs):
 
-        objs = self.obj_extractor(obs)
-        next_objs = self.obj_extractor(next_obs)
-
-        state = self.obj_encoder(objs)
-        next_state = self.obj_encoder(next_objs)
+        state = self.encoder(obs)
+        next_state = self.encoder(next_obs)
 
         # Sample negative state across episodes at random
         batch_size = state.size(0)
@@ -118,7 +88,7 @@ class ContrastiveSWM(nn.Module):
         return loss
 
     def forward(self, obs):
-        return self.obj_encoder(self.obj_extractor(obs))
+        return self.slot_encoder(obs)
 
 
 class TransitionGNN(torch.nn.Module):
@@ -246,51 +216,16 @@ class TransitionGNN(torch.nn.Module):
         return node_attr.view(batch_size, num_nodes, -1)
 
 
-def train():
+def cswm_train(slot_encoder, train_loader, device, wandb, args):
     obs = train_loader.__iter__().next()[0]
     input_shape = obs[0].size()
 
-    model = modules.ContrastiveSWM(
-        embedding_dim=args.embedding_dim,
-        hidden_dim=args.hidden_dim,
-        action_dim=args.action_dim,
-        input_dims=input_shape,
-        num_objects=args.num_objects,
-        sigma=args.sigma,
-        hinge=args.hinge,
-        ignore_action=args.ignore_action,
-        copy_action=args.copy_action,
-        encoder=args.encoder).to(device)
 
-    model.apply(utils.weights_init)
 
     optimizer = torch.optim.Adam(
         model.parameters(),
         lr=args.learning_rate)
 
-    if args.decoder:
-        if args.encoder == 'large':
-            decoder = modules.DecoderCNNLarge(
-                input_dim=args.embedding_dim,
-                num_objects=args.num_objects,
-                hidden_dim=args.hidden_dim // 16,
-                output_size=input_shape).to(device)
-        elif args.encoder == 'medium':
-            decoder = modules.DecoderCNNMedium(
-                input_dim=args.embedding_dim,
-                num_objects=args.num_objects,
-                hidden_dim=args.hidden_dim // 16,
-                output_size=input_shape).to(device)
-        elif args.encoder == 'small':
-            decoder = modules.DecoderCNNSmall(
-                input_dim=args.embedding_dim,
-                num_objects=args.num_objects,
-                hidden_dim=args.hidden_dim // 16,
-                output_size=input_shape).to(device)
-        decoder.apply(utils.weights_init)
-        optimizer_dec = torch.optim.Adam(
-            decoder.parameters(),
-            lr=args.learning_rate)
 
     # Train model.
     print('Starting model training...')
@@ -305,31 +240,14 @@ def train():
             data_batch = [tensor.to(device) for tensor in data_batch]
             optimizer.zero_grad()
 
-            if args.decoder:
-                optimizer_dec.zero_grad()
-                obs, action, next_obs = data_batch
-                objs = model.obj_extractor(obs)
-                state = model.obj_encoder(objs)
 
-                rec = torch.sigmoid(decoder(state))
-                loss = F.binary_cross_entropy(
-                    rec, obs, reduction='sum') / obs.size(0)
-
-                next_state_pred = state + model.transition_model(state, action)
-                next_rec = torch.sigmoid(decoder(next_state_pred))
-                next_loss = F.binary_cross_entropy(
-                    next_rec, next_obs,
-                    reduction='sum') / obs.size(0)
-                loss += next_loss
-            else:
-                loss = model.contrastive_loss(*data_batch)
+            loss = model.contrastive_loss(*data_batch)
 
             loss.backward()
             train_loss += loss.item()
             optimizer.step()
 
-            if args.decoder:
-                optimizer_dec.step()
+
 
             if batch_idx % args.log_interval == 0:
                 print(
@@ -347,4 +265,4 @@ def train():
 
         if avg_loss < best_loss:
             best_loss = avg_loss
-            torch.save(model.state_dict(), model_file)
+            torch.save(model.slot_encoder.state_dict(), wandb.run.dir + "/encoder.pt")

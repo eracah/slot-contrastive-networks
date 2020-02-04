@@ -13,134 +13,90 @@ class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
 
-class NatureCNN(nn.Module):
-    def __init__(self, input_channels, args):
-        super().__init__()
-        self.feature_size = args.feature_size
-        self.downsample = not args.no_downsample
-        self.input_channels = input_channels
-        self.end_with_relu = args.end_with_relu
-        self.args = args
+init_ = lambda m: init(m,
+       nn.init.orthogonal_,
+       lambda x: nn.init.constant_(x, 0),
+       nn.init.calculate_gain('relu'))
 
-        init_ = lambda m: init(m,
-                               nn.init.orthogonal_,
-                               lambda x: nn.init.constant_(x, 0),
-                               nn.init.calculate_gain('relu'))
+class NatureFMapEncoder(nn.Module):
+    def __init__(self, input_channels):
+        super().__init__()
+
+        self.input_channels = input_channels
+
         self.flatten = Flatten()
 
-        if self.downsample:
-            self.final_conv_size = 32 * 7 * 7
-            self.final_conv_shape = (32, 7, 7)
-            self.main = nn.Sequential(
-                init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
-                nn.ReLU(),
-                init_(nn.Conv2d(32, 64, 4, stride=2)),
-                nn.ReLU(),
-                init_(nn.Conv2d(64, 32, 3, stride=1)),
-                nn.ReLU(),
-                Flatten(),
-                init_(nn.Linear(self.final_conv_size, self.feature_size)),
-                #nn.ReLU()
-            )
-        else:
-            self.final_conv_size = 64 * 9 * 6
-            self.final_conv_shape = (64, 9, 6)
-            self.main = nn.Sequential(
-                init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
-                nn.ReLU(),
-                init_(nn.Conv2d(32, 64, 4, stride=2)),
-                nn.ReLU(),
-                init_(nn.Conv2d(64, 128, 4, stride=2)),
-                nn.ReLU(),
-                init_(nn.Conv2d(128, 64, 3, stride=1)),
-                nn.ReLU(),
-                Flatten(),
-                init_(nn.Linear(self.final_conv_size, self.feature_size)),
-                #nn.ReLU()
-            )
+
+        self.encode_to_f5 = nn.Sequential(
+            init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
+            nn.ReLU(),
+            init_(nn.Conv2d(32, 64, 4, stride=2)),
+            nn.ReLU(),
+            init_(nn.Conv2d(64, 128, 4, stride=2)),
+            nn.ReLU()
+        )
         self.train()
 
+
+    @property
+    def local_layer_depth(self):
+        return self.encode_to_f5[4].out_channels
+
     def forward(self, inputs):
-        fmaps = self.get_fmaps(inputs, fmaps=True)['f7']
-        return fmaps
+        f5 = self.encode_to_f5(inputs)
+        return f5
+
+class NatureCNN(nn.Module):
+    def __init__(self, input_channels, embedding_dim):
+        super().__init__()
+        self.fmap_encoder = NatureFMapEncoder(input_channels)
+        self.embedding_dim = embedding_dim
+        self.final_conv_size = 64 * 9 * 6
+        self.final_conv_shape = (64, 9, 6)
+
+        self.conv_to_f7 = nn.Sequential(
+            init_(nn.Conv2d(128, 64, 3, stride=1)),
+            nn.ReLU()
+        )
+
+        self.f7_to_global_vector = nn.Sequential(
+            Flatten(),
+            init_(nn.Linear(self.final_conv_size, self.embedding_dim))
+        )
+    def forward(self, x):
+        fmaps = self.fmap_encoder(x)
+        global_vec = self.f7_to_global_vector(self.conv_to_f7(fmaps))
+        return global_vec
 
 
-    def get_fmaps(self, inputs, fmaps=False):
-        f5 = self.main[:6](inputs)
-        f7 = self.main[6:8](f5)
-        out = self.main[8:](f7)
-        if self.end_with_relu:
-            assert self.args.method != "vae", "can't end with relu and use vae!"
-            out = F.relu(out)
-        if fmaps:
-            return {
-                'f5': f5,
-                'f7': f7,
-                'out': out
-            }
-        return out
-
-class SlotAddOn(nn.Module):
-    def __init__(self, inp_shape, num_slots, slot_len):
+class NatureObjFMapEncoder(nn.Module):
+    def __init__(self, num_slots):
         super().__init__()
         self.num_slots = num_slots
-        self.slot_len = slot_len
-        num_inp_channels, h, w = inp_shape
-        self.slot_conv = nn.Conv2d(num_inp_channels, num_slots, 1)
-        self.slot_mlp = nn.Sequential(nn.Linear(h*w, slot_len),
-                                     nn.ReLU(),
-                                     nn.Linear(slot_len, slot_len) )
+        self.conv_to_f7 = nn.Sequential(
+            init_(nn.Conv2d(128, 64, 3, stride=1)),
+            nn.ReLU()
+        )
+        self.slot_conv = nn.Sequential(
+                            nn.Conv2d(64, num_slots, 1),
+                            nn.ReLU()
+        )
 
-    def get_fmaps(self, inp):
-        slot_fmaps = self.slot_conv(inp)
+    def forward(self, fmaps):
+        slot_fmaps = self.slot_conv(self.conv_to_f7(fmaps))
         return slot_fmaps
 
-
-    def forward(self,inp):
-        slot_fmaps = self.slot_conv(inp)
-        slots = []
-        for i in range(self.num_slots):
-            slot_fmap = slot_fmaps[:, i]
-            slot = self.slot_mlp(Flatten()(slot_fmap))
-            slots.append(slot)
-        slots = torch.stack(slots, dim=1)
-        #slots = torch.cat([self.slot_fc(slot_fmap) for slot_fmap in slot_fmaps])
-        return slots
-
-#class ReverseAttentionAddOn(nn.Module):
-
-
-class SlotEncoder(nn.Module):
-    def __init__(self,input_channels, slot_len, num_slots, args):
+class NaureCNNObjExtractor(nn.Module):
+    def __init__(self, input_dim, num_slots):
         super().__init__()
-        self.slot_len = slot_len
+        self.cnn = NatureFMapEncoder(input_dim)
+        self.fmap2objfmaps = NatureObjFMapEncoder(num_slots)
         self.num_slots = num_slots
-        self.base_encoder = NatureCNN(input_channels, args)
-        inp_shape = self.base_encoder.final_conv_shape
-        self.slot_addon = SlotAddOn(inp_shape, self.num_slots, self.slot_len)
+        self.final_fmap_shape = (9, 6)
 
-
-    def get_fmaps(self, x):
-        fmaps = self.base_encoder(x)
-        slot_fmaps = self.slot_addon.get_fmaps(fmaps)
-        return fmaps, slot_fmaps
-
-    def forward(self, x):
-        fmaps = self.base_encoder(x)
-        slots = self.slot_addon(fmaps)
-        return slots
-
-
-class SlotIWrapper(nn.Module):
-    def __init__(self, slot_encoder, i):
-        super().__init__()
-        self.slot_encoder = slot_encoder
-        self.i = i
-
-    def forward(self,x):
-        slots = self.slot_encoder(x)
-        slot_i = slots[:,self.i]
-        return slot_i
+    def forward(self, input):
+        slot_fmaps = self.fmap2objfmaps(self.cnn(input))
+        return slot_fmaps
 
 
 class EncoderCNNSmall(nn.Module):
@@ -236,4 +192,16 @@ class EncoderMLP(nn.Module):
         h = self.act1(self.fc1(h_flat))
         h = self.act2(self.ln(self.fc2(h)))
         return self.fc3(h)
+
+
+class CSWMSlotEncoder(nn.Module):
+    def __init__(self, base_cnn, input_dim, output_dim, hidden_dim, num_objects, act_fn='relu' ):
+        super().__init__()
+        self.base_cnn = base_cnn
+        self.mlp = EncoderMLP(input_dim, output_dim, hidden_dim, num_objects, act_fn)
+
+    def forward(self, x):
+        self.mlp(self.base_cnn(x))
+
+
 
