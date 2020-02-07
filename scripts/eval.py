@@ -43,13 +43,10 @@ if __name__ == "__main__":
     if args.train_run_dirname is None:
         list_of_files = [f for f in glob.glob(args.train_run_parent_dir + "/*") if os.path.isdir(f) and "run" in os.path.basename(f)]  # * means all if need specific format then *.csv
         latest_file = max(list_of_files, key=os.path.getctime)
-        args.train_run_dir = Path(latest_file).name
+        args.train_run_dirname = Path(latest_file).name
 
 
-    train_run_path = Path(args.train_run_parent_dir) / Path(args.train_run_dir)
-    print(train_run_path)
-    print(args.train_run_parent_dir)
-    print(args.train_run_dir)
+    train_run_path = Path(args.train_run_parent_dir) / Path(args.train_run_dirname)
     weights_path = train_run_path / Path("encoder.pt")
     args_path = train_run_path / "wandb-metadata.json"
     train_args = json.load(open(args_path))["args"]
