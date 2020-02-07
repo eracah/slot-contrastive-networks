@@ -3,7 +3,7 @@ import os
 import torch
 import wandb
 from src.encoders import EncoderCNNMedium, NaureCNNObjExtractor, NatureCNN, EncoderMLP
-from src.data.stdim_dataloader import get_stdim_dataloader, get_stdim_eval_dataloader
+from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 import numpy as np
 import torch.nn as nn
@@ -16,7 +16,6 @@ baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 
 def get_argparser():
     parser = argparse.ArgumentParser()
-    # train
     parser.add_argument("--run-dir", type=str, default="./temp")
     parser.add_argument('--num-frames', type=int, default=100000,  help='Number of steps to pretrain representations (default: 100000)')
     parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
@@ -24,21 +23,29 @@ def get_argparser():
     parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
     parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4', help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
     parser.add_argument('--num-frame-stack', type=int, default=1, help='Number of frames to stack for a state')
-    parser.add_argument('--no-downsample', action='store_true', default=True, help='Whether to use a linear classifier')
-    parser.add_argument("--color", action='store_true', default=True)
+    parser.add_argument("--screen-size", nargs=2, type=int, default=(210, 160))
+    parser.add_argument("--downsample", default=False, dest="screen_size", action='store_const', const=(84, 84))
+    parser.add_argument("--frameskip",type=int, default=4)
+    parser.add_argument("--grayscale", action='store_true', default=False)
+    color_group = parser.add_mutually_exclusive_group()
+    color_group.add_argument("--color", action="store_false", dest="grayscale")
     parser.add_argument("--checkpoint-index", type=int, default=-1)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument('--method', type=str, default='scn', choices= baselines + ["scn"], help='Method to use for training representations (default: scn')
     parser.add_argument('--ablation', type=str, default="none", choices=ablations, help='Ablation of scn (default: scn')
     parser.add_argument('--embedding-dim', type=int, default=256, help='Dimensionality of embedding.')
-    parser.add_argument("--num_slots", type=int, default=8)
+    parser.add_argument("--num-slots", type=int, default=8)
     parser.add_argument("--slot-len", type=int, default=32)
     parser.add_argument("--patience", type=int, default=15)
+    parser.add_argument("--max-episode-steps", type=int, default=-1)
+    parser.add_argument("--warmstart", type=int, default=0)
+    parser.add_argument("--crop",nargs=2,type=int, default=[-1,-1])
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning Rate for learning representations (default: 5e-4)')
     parser.add_argument('--batch-size', type=int, default=128, help='Mini-Batch Size (default: 64)')
     parser.add_argument('--epochs', type=int, default=100, help='Number of epochs for  (default: 100)')
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument('--num-episodes', type=int, default=10)
+    parser.add_argument('--noop-max', type=int, default=30)
     parser.add_argument("--regime", type=str, default="stdim", choices=["stdim", "cswm"],
                         help="whether to use the encoder and dataloader from stdim or from cswm")
     parser.add_argument('--hidden-dim', type=int, default=512, help='Number of hidden units in transition MLP.')
@@ -64,8 +71,6 @@ def get_argparser():
     # parser.add_argument('--save-folder', type=str,
     #                     default='checkpoints',
     #                     help='Path to checkpoints.')
-
-
     return parser
 
 def do_epoch(loader, optimizer, model, epoch):
@@ -124,16 +129,16 @@ def get_encoder(args, sample_frame):
 
 if __name__ == "__main__":
     parser = get_argparser()
-    args, unknown = parser.parse_known_args()
+    args = parser.parse_args()
     wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["train"])
     config = {}
     config.update(vars(args))
     wandb.config.update(config)
-    log_file = os.path.join(args.run_dir, 'log.txt')
-    logging.basicConfig(level=logging.INFO, format='%(message)s')
+    log_file = os.path.join(wandb.run.dir, 'log.txt')
+    logging.basicConfig(level=logging.WARN, format='%(message)s')
     logger = logging.getLogger()
-    logger.addHandler(logging.FileHandler(log_file, 'a'))
-    print = logger.info
+    #logger.addHandler(logging.FileHandler(log_file, 'a'))
+    print = logger.warning
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(device)
@@ -153,7 +158,7 @@ if __name__ == "__main__":
 
     if args.method == "supervised":
         from atariari.benchmark.probe import ProbeTrainer
-        tr_dl, val_dl, test_dl = dataloaders
+        tr_dl, val_dl, test_dl, label_keys = dataloaders
         sample_label = next(tr_dl.__iter__())[-1]
         num_state_variables = sample_label.shape[1]
         trainer = ProbeTrainer(encoder=encoder,
@@ -166,6 +171,7 @@ if __name__ == "__main__":
                                representation_len=args.embedding_dim)
         trainer.train(tr_dl, val_dl)
         test_acc, test_f1 = trainer.test(test_dl)
+        torch.save(encoder.state_dict(), wandb.run.dir + "/encoder.pt")
 
     else:
         tr_loader, val_loader = dataloaders
@@ -211,11 +217,13 @@ if __name__ == "__main__":
             model.train()
             train_loss = 0
             tr_loss = do_epoch(tr_loader, optimizer, model, epoch)
+            wandb.log({"tr_loss": tr_loss})
             print('====> Epoch: {} Train average loss: {:.6f}'.format(
                 epoch, tr_loss))
 
             model.eval()
             val_loss = do_epoch(val_loader, optimizer, model, epoch)
+            wandb.log({"val_loss": val_loss})
             print('====> \t Val average loss: {:.6f}'.format(
                 val_loss))
             if val_loss < best_loss:

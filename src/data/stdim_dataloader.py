@@ -1,40 +1,12 @@
-import torch
-from torch.utils.data import DataLoader
-import numpy as np
-from atariari.benchmark.episodes import get_episodes
 from torch.utils.data import DataLoader, TensorDataset
-class EpisodeDataset(torch.utils.data.Dataset):
-    """Create dataset of (o_t, a_t, o_{t+1}) transitions from replay buffer."""
+try:
+    import wandb
+except:
+    pass
+import torch
+from src.data.data_collection import get_transitions, get_probe_data, EpisodeDataset
 
-    def __init__(self, episodes):
-        self.episodes = episodes
-        # Build table for conversion between linear idx -> episode/step idx
-        self.idx2episode = []
-        step = 0
-        for ep in range(len(episodes)):
-            num_steps = episodes[ep].shape[0]
-            idx_tuple = [(ep, idx) for idx in range(num_steps - 1)]
-            self.idx2episode.extend(idx_tuple)
-            step += num_steps
-
-        self.num_steps = step
-
-    def __len__(self):
-        return len(self.idx2episode)
-
-    def __getitem__(self, idx):
-
-        ep, step = self.idx2episode[idx]
-
-
-        obs = self.episodes[ep][step] / 255.
-        action = -1.
-        next_obs = self.episodes[ep][step + 1] / 255.
-
-        return obs, action, next_obs
-
-
-def get_stdim_dataloader(args,mode="train"):
+def get_stdim_dataloader(args, mode="train"):
     if mode == "train":
         return get_stdim_train_dataloader(args)
     else:
@@ -42,26 +14,30 @@ def get_stdim_dataloader(args,mode="train"):
 
 
 def get_stdim_train_dataloader(args):
-    data = get_episodes(steps=args.num_frames,
-                                 env_name=args.env_name,
-                                 seed=args.seed,
-                                 num_processes=args.num_processes,
-                                 num_frame_stack=args.num_frame_stack,
-                                 downsample=not args.no_downsample,
-                                 color=args.color,
-                                 entropy_threshold=args.entropy_threshold,
-                                 collect_mode=args.collect_mode,
-                                 train_mode="train_encoder",
-                                 checkpoint_index=args.checkpoint_index,
-                                 min_episode_length=args.batch_size)
-    tr_eps, val_eps = data
-    tr_dataset = EpisodeDataset(tr_eps)
+    eps, actions, _ = get_transitions(args, max_frames=args.num_frames)
+    num_episodes = len(eps)
+    num_tr_episodes = round(0.8 * num_episodes)
+    tr_eps, val_eps = eps[:num_tr_episodes], eps[num_tr_episodes:]
+    tr_actions, val_actions = actions[:num_tr_episodes], actions[num_tr_episodes:]
+    tr_dataset = EpisodeDataset(tr_eps, tr_actions)
+    val_dataset = EpisodeDataset(val_eps, val_actions)
+
     tr_dl = DataLoader(tr_dataset, batch_size=args.batch_size, shuffle=True)
-    val_dataset = EpisodeDataset(val_eps)
     val_dl = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
     return tr_dl, val_dl
 
-def make_labelled_dataloader(eps,label_dict, batch_size):
+def get_stdim_eval_dataloader(args):
+    data = get_probe_data(args)
+    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = data
+    tr_dl = make_labelled_dataloader(tr_eps,tr_labels,args.batch_size)
+    val_dl = make_labelled_dataloader(val_eps, val_labels, args.batch_size)
+    test_dl = make_labelled_dataloader(test_eps, test_labels, args.batch_size)
+    label_keys = list(tr_labels.keys())
+
+    return tr_dl, val_dl, test_dl, label_keys
+
+def make_labelled_dataloader(eps, label_dict, batch_size):
+
     labels = torch.tensor(list(label_dict.values())).long()
     labels_tensor = labels.transpose(1, 0)
     ds = TensorDataset(eps, labels_tensor)
@@ -69,22 +45,7 @@ def make_labelled_dataloader(eps,label_dict, batch_size):
     return dl
 
 
-def get_stdim_eval_dataloader(args):
-    data = get_episodes(steps=args.num_frames,
-                                 env_name=args.env_name,
-                                 seed=args.seed,
-                                 num_processes=args.num_processes,
-                                 num_frame_stack=args.num_frame_stack,
-                                 downsample=not args.no_downsample,
-                                 color=args.color,
-                                 entropy_threshold=args.entropy_threshold,
-                                 collect_mode=args.collect_mode,
-                                 train_mode="probe",
-                                 checkpoint_index=args.checkpoint_index,
-                                 min_episode_length=args.batch_size)
-    tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = data
-    tr_dl = make_labelled_dataloader(tr_eps,tr_labels,args.batch_size)
-    val_dl = make_labelled_dataloader(val_eps, val_labels, args.batch_size)
-    test_dl = make_labelled_dataloader(test_eps, test_labels, args.batch_size)
 
-    return tr_dl, val_dl, test_dl
+
+
+

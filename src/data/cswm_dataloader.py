@@ -11,7 +11,10 @@ from pathlib import Path
 if str(Path.cwd()) not in sys.path:
     sys.path.insert(0, str(Path.cwd()))
 
+from src.data.data_collection import get_transitions,  EpisodeDataset
+from src.data.stdim_dataloader import get_stdim_eval_dataloader
 import argparse
+import torch
 
 
 from atariari.benchmark.wrapper import AtariARIWrapper
@@ -97,14 +100,14 @@ def get_cswm_data(env_name, seed, num_episodes=1000):
             action = agent.act(ob, reward, done)
             ob, _, _, _ = env.step(action)
         prev_ob = crop_normalize(ob, crop)
-        ob, _, _, _ = env.step(0)
+        ob, _, _, info = env.step(0)
         ob = crop_normalize(ob, crop)
 
         while True:
             replay_buffer[i]['obs'].append(
                 np.concatenate((ob, prev_ob), axis=0))
             prev_ob = ob
-
+            replay_buffer[i]["label"].append(info["labels"])
             action = agent.act(ob, reward, done)
             ob, reward, done, info = env.step(action)
             ob = crop_normalize(ob, crop)
@@ -112,7 +115,7 @@ def get_cswm_data(env_name, seed, num_episodes=1000):
             replay_buffer[i]['action'].append(action)
             replay_buffer[i]['next_obs'].append(
                 np.concatenate((ob, prev_ob), axis=0))
-            replay_buffer[i]["label"].append(info["labels"])
+
 
             if done:
                 break
@@ -127,14 +130,14 @@ def get_cswm_data(env_name, seed, num_episodes=1000):
 class StateTransitionsDataset(data.Dataset):
     """Create dataset of (o_t, a_t, o_{t+1}) transitions from replay buffer."""
 
-    def __init__(self, buffer, labels=False):
+    def __init__(self, buffer, eval=False):
         """
         Args:
             hdf5_file (string): Path to the hdf5 file that contains experience
                 buffer
         """
         self.experience_buffer = buffer
-        self.labels = labels
+        self.eval = eval
 
         # Build table for conversion between linear idx -> episode/step idx
         self.idx2episode = list()
@@ -153,14 +156,12 @@ class StateTransitionsDataset(data.Dataset):
     def __getitem__(self, idx):
         ep, step = self.idx2episode[idx]
 
-        obs = self.experience_buffer[ep]['obs'][step]
-        action = self.experience_buffer[ep]['action'][step]
-        next_obs = self.experience_buffer[ep]['next_obs'][step]
+        obs = torch.tensor(self.experience_buffer[ep]['obs'][step], dtype=torch.float32)
+        action = torch.tensor(self.experience_buffer[ep]['action'][step], dtype=torch.int64)
+        next_obs = torch.tensor(self.experience_buffer[ep]['next_obs'][step], dtype=torch.float32)
         label = self.experience_buffer[ep]['label'][step]
-        obs = np.array(obs,dtype=np.float32)
-        next_obs = np.array(next_obs, dtype=np.float32)
-        if self.labels:
-            return [obs, action, next_obs, np.asarray(list(label.values()))]
+        if self.eval:
+            return [obs, torch.tensor(list(label.values()))]
         else:
             return [obs, action, next_obs]
 
@@ -172,31 +173,24 @@ def get_cswm_dataloader(args, mode="train"):
         return get_cswm_eval_dataloader(args)
 
 def get_cswm_train_dataloader(args):
+    num_tr_episodes = round(0.8 * args.num_episodes)
 
-    tr_buffer = get_cswm_data(args.env_name, args.seed, int(0.8*args.num_episodes))
-    tr_ds = StateTransitionsDataset(tr_buffer)
-    tr_dl = data.DataLoader(tr_ds, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    eps, actions, _ = get_transitions(args, seed=args.seed, max_episodes=args.num_episodes)
+    tr_eps, val_eps = eps[:num_tr_episodes], eps[num_tr_episodes:]
+    tr_actions, val_actions = actions[:num_tr_episodes], actions[num_tr_episodes:]
 
-    val_buffer = get_cswm_data(args.env_name, args.seed + 10, int(0.2 * args.num_episodes))
-    val_ds = StateTransitionsDataset(val_buffer)
-    val_dl = data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=True, num_workers=4)
+
+    tr_dataset = EpisodeDataset(tr_eps, tr_actions)
+    val_dataset = EpisodeDataset(val_eps, val_actions)
+
+    tr_dl = data.DataLoader(tr_dataset, batch_size=args.batch_size, shuffle=True)
+    val_dl = data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
     return tr_dl, val_dl
 
 
 def get_cswm_eval_dataloader(args):
-    tr_buffer = get_cswm_data(args.env_name, args.seed, int(0.8*args.num_episodes))
-    tr_ds = StateTransitionsDataset(tr_buffer, labels=True)
-    tr_dl = data.DataLoader(tr_ds, batch_size=args.batch_size, shuffle=True, num_workers=4)
+    return get_stdim_eval_dataloader(args)
 
-    val_buffer = get_cswm_data(args.env_name, args.seed + 10, int(0.1 * args.num_episodes))
-    val_ds = StateTransitionsDataset(val_buffer, labels=True)
-    val_dl = data.DataLoader(val_ds, batch_size=args.batch_size, shuffle=True, num_workers=4)
-
-    test_buffer = get_cswm_data(args.env_name, args.seed + 20, int(0.1 * args.num_episodes))
-    test_ds = StateTransitionsDataset(test_buffer, labels=True)
-    test_dl = data.DataLoader(test_ds, batch_size=args.batch_size, shuffle=True, num_workers=4)
-
-    return tr_dl, val_dl, test_dl
 
 
 
