@@ -36,6 +36,7 @@ if __name__ == "__main__":
     parser.add_argument("--train-run-parent-dir", type=str, default=".")
     parser.add_argument("--train-run-dirname", type=str)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
+    parser.add_argument("--max-episode-steps", type=int, default=-1)
     args = parser.parse_args()
 
 
