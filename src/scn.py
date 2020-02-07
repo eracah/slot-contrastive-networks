@@ -26,7 +26,7 @@ class SCNModel(nn.Module):
         logits = torch.matmul(self.score_matrix_1(slots_t).transpose(1, 0),
                               slots_pos.permute(1, 2, 0))
         input = logits.reshape(num_slots*batch_size, -1)
-        target = torch.cat([torch.arange(batch_size) for i in range(num_slots)])
+        target = torch.cat([torch.arange(batch_size) for i in range(num_slots)]).to(self.device)
         loss1 = nn.CrossEntropyLoss()(input, target)
         accuracy1, _ = calculate_accuracy(input.detach().cpu().numpy(), target.detach().cpu().numpy())
         if self.training:
@@ -46,7 +46,7 @@ class SCNModel(nn.Module):
         logits = torch.matmul(self.score_matrix_2(slots_t),
                               slots_pos.transpose(2,1))
         input = logits.reshape(batch_size * num_slots, -1)
-        target = torch.cat([torch.arange(num_slots) for i in range(batch_size)])
+        target = torch.cat([torch.arange(num_slots) for i in range(batch_size)]).to(self.device)
         loss2 = nn.CrossEntropyLoss()(input, target)
         accuracy2, _ = calculate_accuracy(input.detach().cpu().numpy(), target.detach().cpu().numpy())
         if self.training:
