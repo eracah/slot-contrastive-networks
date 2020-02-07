@@ -4,20 +4,15 @@ from torch.utils.data import DataLoader
 from src.data.wrappers import wrap_atari_env
 from atariari.benchmark.wrapper import AtariARIWrapper
 import gym
-from gym.wrappers import FrameStack, TimeLimit
 try:
     import wandb
 except:
     pass
 from src.utils import appendabledict
-
-from itertools import chain
 import torch
 from scipy.stats import entropy as compute_entropy
 from collections import Counter
 import numpy as np
-from functools import partial
-from matplotlib import pyplot as plt
 
 
 def get_transitions(args, seed=42, keep_as_episodes=True, min_episode_length=8, max_frames=None, max_episodes=None):
