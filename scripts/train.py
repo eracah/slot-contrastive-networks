@@ -35,7 +35,6 @@ def get_argparser():
     parser.add_argument('--ablation', type=str, default="none", choices=ablations, help='Ablation of scn (default: scn')
     parser.add_argument('--embedding-dim', type=int, default=256, help='Dimensionality of embedding.')
     parser.add_argument("--num-slots", type=int, default=8)
-    parser.add_argument("--slot-len", type=int, default=32)
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
     parser.add_argument("--warmstart", type=int, default=0)

@@ -8,4 +8,4 @@
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
 #SBATCH --partition=unkillable                      # Ask for unkillable job
 
-bash ./launch_scripts/mila_cluster.sl
+bash ./launch_scripts/mila_cluster.sl $@
