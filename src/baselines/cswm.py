@@ -215,54 +215,54 @@ class TransitionGNN(torch.nn.Module):
         # [batch_size, num_nodes, hidden_dim]
         return node_attr.view(batch_size, num_nodes, -1)
 
-
-def cswm_train(slot_encoder, train_loader, device, wandb, args):
-    obs = train_loader.__iter__().next()[0]
-    input_shape = obs[0].size()
-
-
-
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        lr=args.learning_rate)
-
-
-    # Train model.
-    print('Starting model training...')
-    step = 0
-    best_loss = 1e9
-
-    for epoch in range(1, args.epochs + 1):
-        model.train()
-        train_loss = 0
-
-        for batch_idx, data_batch in enumerate(train_loader):
-            data_batch = [tensor.to(device) for tensor in data_batch]
-            optimizer.zero_grad()
-
-
-            loss = model.contrastive_loss(*data_batch)
-
-            loss.backward()
-            train_loss += loss.item()
-            optimizer.step()
-
-
-
-            if batch_idx % args.log_interval == 0:
-                print(
-                    'Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
-                        epoch, batch_idx * len(data_batch[0]),
-                        len(train_loader.dataset),
-                               100. * batch_idx / len(train_loader),
-                               loss.item() / len(data_batch[0])))
-
-            step += 1
-
-        avg_loss = train_loss / len(train_loader.dataset)
-        print('====> Epoch: {} Average loss: {:.6f}'.format(
-            epoch, avg_loss))
-
-        if avg_loss < best_loss:
-            best_loss = avg_loss
-            torch.save(model.slot_encoder.state_dict(), wandb.run.dir + "/encoder.pt")
+#
+# def cswm_train(slot_encoder, train_loader, device, wandb, args):
+#     obs = train_loader.__iter__().next()[0]
+#     input_shape = obs[0].size()
+#
+#
+#
+#     optimizer = torch.optim.Adam(
+#         model.parameters(),
+#         lr=args.learning_rate)
+#
+#
+#     # Train model.
+#     print('Starting model training...')
+#     step = 0
+#     best_loss = 1e9
+#
+#     for epoch in range(1, args.epochs + 1):
+#         model.train()
+#         train_loss = 0
+#
+#         for batch_idx, data_batch in enumerate(train_loader):
+#             data_batch = [tensor.to(device) for tensor in data_batch]
+#             optimizer.zero_grad()
+#
+#
+#             loss = model.contrastive_loss(*data_batch)
+#
+#             loss.backward()
+#             train_loss += loss.item()
+#             optimizer.step()
+#
+#
+#
+#             if batch_idx % args.log_interval == 0:
+#                 print(
+#                     'Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+#                         epoch, batch_idx * len(data_batch[0]),
+#                         len(train_loader.dataset),
+#                                100. * batch_idx / len(train_loader),
+#                                loss.item() / len(data_batch[0])))
+#
+#             step += 1
+#
+#         avg_loss = train_loss / len(train_loader.dataset)
+#         print('====> Epoch: {} Average loss: {:.6f}'.format(
+#             epoch, avg_loss))
+#
+#         if avg_loss < best_loss:
+#             best_loss = avg_loss
+#             torch.save(model.slot_encoder.state_dict(), wandb.run.dir + "/encoder.pt")
