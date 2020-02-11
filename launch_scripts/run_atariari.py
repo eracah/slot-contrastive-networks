@@ -5,14 +5,18 @@ import os
 print(os.getcwd())
 parser = argparse.ArgumentParser()
 parser.add_argument("--unkillable", action='store_true', default=False)
+parser.add_argument("--main", action='store_true', default=False)
 parser.add_argument("--regime", type=str, default="stdim", choices=["stdim", "cswm"],
                     help="whether to use the encoder and dataloader from stdim or from cswm")
 parser.add_argument("--base-cmd", type=str, default="sbatch", choices=["sbatch", "bash"])
 parser.add_argument('--method', type=str, default='scn', help='Method to use for training representations (default: scn')
+parser.add_argument('--envs', type=str, nargs="+", default='None')
 args = parser.parse_args()
 base_cmd = args.base_cmd
 if args.unkillable:
     file = "unkillable_mila_cluster.sl"
+elif args.main:
+    file = "main_mila_cluster.sl"
 else:
     file = "mila_cluster.sl"
 ss= "launch_scripts/" + file
@@ -45,6 +49,8 @@ envs = ['asteroids',
 'yars_revenge']
 
 envs = ['pong', 'space_invaders', 'ms_pacman']
+if args.envs != "None":
+    envs = args.envs
 
 
 suffix = "NoFrameskip-v4"
@@ -67,17 +73,17 @@ for i,env in enumerate(envs):
     elif args.regime == "cswm":
         sargs.extend(['--regime', 'cswm', "--color", '--num-episodes', '1000', '--embedding-dim', '4', '--action-dim', '6', '--num-slots', '3',
          '--copy-action', '--epochs', '200',"--noop-max", "0", "--num-frame-stack", "2", "--screen-size", "50", "50", '--frameskip', '4',
-                      '--hidden-dim', '512', '--lr', '5e-4', '--batch-size', '1024'])
+                      '--hidden-dim', '512', '--lr', '5e-4', '--batch-size', '1024', "--max-episode-steps", "11"])
         if env in ["space_invaders", "pong"]:
             sargs.extend(["--num-slots", "3"])
             if env == "pong":
-                sargs.extend([ "--max-episode-steps", "11", '--crop', '35', '190'])
+                sargs.extend([ '--crop', '35', '190'])
                 #"--crop", "35", "190", "--warmstart", "58",
             else:
-                sargs.extend(["--max-episode-steps", "11", "--crop", '30', '200'])
+                sargs.extend([ "--crop", '30', '200'])
                 #"--crop", "30", "200", "--warmstart", "50",
         else:
-            sargs.extend(["--num-slots", "5", "--max-episode-steps", "65"])
+            sargs.extend(["--num-slots", "5"])
 
 
     sargs.extend(["--method", args.method])
