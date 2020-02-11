@@ -11,6 +11,8 @@ parser.add_argument("--regime", type=str, default="stdim", choices=["stdim", "cs
 parser.add_argument("--base-cmd", type=str, default="sbatch", choices=["sbatch", "bash"])
 parser.add_argument('--method', type=str, default='scn', help='Method to use for training representations (default: scn')
 parser.add_argument('--envs', type=str, nargs="+", default='None')
+parser.add_argument('--epochs',type=int, default= 600)
+parser.add_argument('--batch-size', default=1024, type=int)
 args = parser.parse_args()
 base_cmd = args.base_cmd
 if args.unkillable:
@@ -87,11 +89,12 @@ for i,env in enumerate(envs):
         if args.method == "cswm":
             sargs.extend([ '--epochs', '200',  '--lr', '5e-4', '--batch-size', '1024'])
         else:
-            sargs.extend(['--epochs', '600', '--lr', '5e-4', '--batch-size', '1024'])
+            sargs.extend(['--lr', '5e-4'])
+            sargs.extend(['--epochs', str(args.epochs), '--batch-size', str(args.batch_size)])
 
 
 
     sargs.extend(["--method", args.method])
 
     print(" ".join(sargs))
-    subprocess.run(sargs)
+    #subprocess.run(sargs)

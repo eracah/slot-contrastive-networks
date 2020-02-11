@@ -40,6 +40,7 @@ class SCNModel(nn.Module):
         """Loss 2:  Does a pair of vectors close in time come from the
                           same slot of different slots"""
 
+
         batch_size, num_slots, slot_len = slots_t.shape
         # logits: batch_size x num_slots x num_slots
         #        for each example (set of 8 slots), for each slot, dot product with every other slot at next time step
