@@ -9,6 +9,7 @@ import numpy as np
 import torch.nn as nn
 from src import cswm_utils
 import logging
+import gym
 # methods that need encoder trained before
 ablations = ["nce", "hybrid", "loss1-only", "loss2-only", "none"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
@@ -176,12 +177,13 @@ if __name__ == "__main__":
         tr_loader, val_loader = dataloaders
 
         if args.method == "cswm":
+            action_dim = gym.make(args.env_name).action_space.n
             from src.baselines.cswm import ContrastiveSWM
             model = ContrastiveSWM(
                 encoder=encoder,
                 embedding_dim=args.embedding_dim,
                 hidden_dim=args.hidden_dim,
-                action_dim=args.action_dim,
+                action_dim=action_dim,
                 num_objects=args.num_slots,
                 sigma=args.sigma,
                 hinge=args.hinge,
