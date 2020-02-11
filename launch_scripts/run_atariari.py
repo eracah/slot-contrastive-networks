@@ -97,4 +97,4 @@ for i,env in enumerate(envs):
     sargs.extend(["--method", args.method])
 
     print(" ".join(sargs))
-    #subprocess.run(sargs)
+    subprocess.run(sargs)
