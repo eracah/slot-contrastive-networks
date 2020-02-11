@@ -31,7 +31,7 @@ if __name__ == "__main__":
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning Rate for learning representations (default: 5e-4)')
     parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs for  (default: 100)')
+    parser.add_argument('--epochs', type=int, default=300, help='Number of epochs for  (default: 100)')
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--train-run-parent-dir", type=str, default=".")
     parser.add_argument("--train-run-dirname", type=str)
