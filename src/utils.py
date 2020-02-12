@@ -120,6 +120,26 @@ def set_seeds(seed):
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
 
+def calculate_multiple_f1_scores(preds, labels):
+    if len(labels.shape) == 1:
+        return calculate_multiclass_f1_score(preds, labels)
+    else:
+        return [compute_f1_score(preds[:,i], labels[:,i],average="weighted") for i in range(labels.shape[-1])]
+
+def calculate_multiple_accuracies(preds, labels):
+    if len(labels.shape) == 1:
+        return calculate_multiclass_accuracy(preds, labels)
+    else:
+        return [calculate_multiclass_accuracy(preds[:,i], labels[:,i]) for i in range(labels.shape[-1])]
+
+def calculate_multiclass_accuracy(preds, labels):
+    acc = float(np.sum((preds == labels).astype(int)) / len(labels))
+    return acc
+
+def calculate_multiclass_f1_score(preds, labels):
+    f1score = compute_f1_score(labels, preds, average="weighted")
+    return f1score
+
 
 def calculate_f1_score(logits, labels):
     preds = np.argmax(logits, axis=1)

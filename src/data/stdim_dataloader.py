@@ -31,17 +31,17 @@ def get_stdim_eval_dataloader(args):
     tr_eps, val_eps, tr_labels, val_labels, test_eps, test_labels = data
     tr_dl = make_labelled_dataloader(tr_eps,tr_labels,args.batch_size)
     val_dl = make_labelled_dataloader(val_eps, val_labels, args.batch_size)
-    test_dl = make_labelled_dataloader(test_eps, test_labels, args.batch_size)
+    test_dl = make_labelled_dataloader(test_eps, test_labels, args.batch_size, drop_last=False)
     label_keys = list(tr_labels.keys())
 
     return tr_dl, val_dl, test_dl, label_keys
 
-def make_labelled_dataloader(eps, label_dict, batch_size):
+def make_labelled_dataloader(eps, label_dict, batch_size, drop_last=True):
 
     labels = torch.tensor(list(label_dict.values())).long()
     labels_tensor = labels.transpose(1, 0)
     ds = TensorDataset(eps, labels_tensor)
-    dl = DataLoader(ds, batch_size=batch_size, shuffle=True)
+    dl = DataLoader(ds, batch_size=batch_size, shuffle=True, drop_last=drop_last)
     return dl
 
 

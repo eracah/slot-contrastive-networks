@@ -7,7 +7,7 @@ from src.utils import log_metrics, postprocess_and_log_metrics
 import argparse
 import torch
 import wandb
-from atariari.benchmark.probe import ProbeTrainer
+from src.evaluation.probe_modules import ProbeTrainer
 from pathlib import Path
 import json
 import numpy as np
@@ -93,15 +93,17 @@ if __name__ == "__main__":
     num_state_variables = len(label_keys)
     num_slots = args.num_slots
     trainer = ProbeTrainer(encoder=encoder,
+                           wandb=wandb,
                            epochs=args.epochs,
                            lr=args.lr,
                            batch_size=args.batch_size,
                            num_state_variables=num_state_variables,
                            fully_supervised=(args.method == "supervised"),
-                           representation_len=representation_len)
+                           representation_len=representation_len, l1_regularization=False)
 
     trainer.train(tr_dl, val_dl)
     test_acc, test_f1score = trainer.test(test_dl)
+    #weights = trainer.get_weights()
     if args.method == "stdim":
         test_f1_dict = dict(zip(label_keys, test_f1score))
         postprocess_and_log_metrics(test_f1_dict, prefix="stdim_",
