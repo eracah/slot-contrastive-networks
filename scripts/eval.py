@@ -18,6 +18,8 @@ import glob
 import os
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
+from matplotlib.ticker import MultipleLocator
+from matplotlib import pyplot as plt
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -106,6 +108,17 @@ if __name__ == "__main__":
     trainer.train(tr_dl, val_dl)
     test_acc, test_f1score = trainer.test(test_dl)
     weights = trainer.get_weights()
+    heatmaps = weights.reshape(len(label_keys), 256, representation_len)
+    hm = heatmaps / heatmaps.sum(axis=2, keepdims=True)
+    for i in range(len(label_keys)):
+        plt.imshow(hm[i], origin="lower", cmap="jet")
+        plt.gca().xaxis.set_major_locator(MultipleLocator(args.embedding_dim))
+        plt.gca().xaxis.grid(True)
+        plt.title(label_keys[i])
+        plot_name = "heatmap_%s" % (label_keys[i])
+        wandb.log({plot_name: plt})
+        plt.savefig(Path(wandb.run.dir) / Path(plot_name + ".png" ))
+
     test_f1_dict = dict(zip(label_keys, test_f1score))
     postprocess_and_log_metrics(test_f1_dict, prefix="concat_",
                                 suffix="_f1")
