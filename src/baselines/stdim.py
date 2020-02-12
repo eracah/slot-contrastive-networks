@@ -56,13 +56,13 @@ class STDIMModel(nn.Module):
         if self.training:
             self.wandb.log({"tr_acc1": acc1})
             self.wandb.log({"tr_acc2": acc2})
-            self.wandb.log({"tr_loss1": loss1})
-            self.wandb.log({"tr_loss2": loss2})
+            self.wandb.log({"tr_loss1": loss1.item()})
+            self.wandb.log({"tr_loss2": loss2.item()})
         else:
             self.wandb.log({"val_acc1": acc1})
             self.wandb.log({"val_acc2": acc2})
-            self.wandb.log({"val_loss1": loss1})
-            self.wandb.log({"val_loss2": loss2})
+            self.wandb.log({"val_loss1": loss1.item()})
+            self.wandb.log({"val_loss2": loss2.item()})
         return loss
 
 

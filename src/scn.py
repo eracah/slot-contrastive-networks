@@ -31,10 +31,10 @@ class SCNModel(nn.Module):
         acc1 = calculate_accuracy(inp.detach().cpu().numpy(), target.detach().cpu().numpy())
         if self.training:
             self.wandb.log({"tr_acc1": acc1})
-            self.wandb.log({"tr_loss1": loss1})
+            self.wandb.log({"tr_loss1": loss1.item()})
         else:
             self.wandb.log({"val_acc1": acc1})
-            self.wandb.log({"val_loss1": loss1})
+            self.wandb.log({"val_loss1": loss1.item()})
         return loss1
 
 
@@ -54,10 +54,10 @@ class SCNModel(nn.Module):
         acc2  = calculate_accuracy(inp.detach().cpu().numpy(), target.detach().cpu().numpy())
         if self.training:
             self.wandb.log({"tr_acc2": acc2})
-            self.wandb.log({"tr_loss2": loss2})
+            self.wandb.log({"tr_loss1": loss2.item()})
         else:
             self.wandb.log({"val_acc2": acc2})
-            self.wandb.log({"val_loss2": loss2})
+            self.wandb.log({"val_loss2": loss2.item()})
         return loss2
 
 
