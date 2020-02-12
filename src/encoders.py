@@ -13,6 +13,15 @@ class Flatten(nn.Module):
     def forward(self, x):
         return x.view(x.size(0), -1)
 
+class ConcatenateSlots(nn.Module):
+    def __init__(self, encoder):
+        super().__init__()
+        self.encoder = encoder
+        self.flatten = Flatten()
+    def forward(self, x):
+        return self.flatten(self.encoder(x))
+
+
 init_ = lambda m: init(m,
        nn.init.orthogonal_,
        lambda x: nn.init.constant_(x, 0),

@@ -181,17 +181,28 @@ def compute_category_avgs(metric_dict):
             continue
         category_mean = np.mean(category_values)
         category_dict[category_name + "_avg"] = category_mean
+
+
     return category_dict
 
 
 def postprocess_raw_metrics(metric_dict):
     overall_avg = compute_dict_average(metric_dict)
+    all_localization_keys = []
+    for category_name, category_keys in summary_key_dict.items():
+        if "localization" in category_name:
+            all_localization_keys.extend(category_keys)
+    overall_localization_avg = np.mean([v for k, v in metric_dict.items() if k in all_localization_keys])
     category_avgs_dict = compute_category_avgs(metric_dict)
+    across_categories_localization_avg = np.mean([v for k, v in category_avgs_dict.items() if "localization" in k])
     avg_across_categories = compute_dict_average(category_avgs_dict)
     metric_dict.update(category_avgs_dict)
 
     metric_dict["overall_avg"] = overall_avg
     metric_dict["across_categories_avg"] = avg_across_categories
+    metric_dict["overall_localization_avg"] = overall_localization_avg
+    metric_dict["across_categories_localization_avg"] = across_categories_localization_avg
+
 
     return metric_dict
 

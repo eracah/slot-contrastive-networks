@@ -4,6 +4,7 @@ from scipy.optimize import linear_sum_assignment as lsa
 import pandas as pd
 from src.evaluation.probe_modules import AttentionProbeTrainer
 from src.utils import log_metrics, postprocess_and_log_metrics
+from src.encoders import ConcatenateSlots
 import argparse
 import torch
 import wandb
@@ -78,6 +79,8 @@ if __name__ == "__main__":
     encoder.load_state_dict(torch.load(weights_path))
     encoder.to(device)
     encoder.eval()
+    if args.method != "stdim":
+        encoder = ConcatenateSlots(encoder)
     print_memory("after encoder trained/loaded")
 
     # for probe_type in ["linear", "mlp"]:
@@ -89,46 +92,46 @@ if __name__ == "__main__":
 
 
     f1s = []
-    representation_len = args.embedding_dim
-    num_state_variables = len(label_keys)
+    representation_len = args.embedding_dim if args.method == "stdim" else args.num_slots * args.embedding_dim
     num_slots = args.num_slots
     trainer = ProbeTrainer(encoder=encoder,
                            wandb=wandb,
                            epochs=args.epochs,
                            lr=args.lr,
                            batch_size=args.batch_size,
-                           num_state_variables=num_state_variables,
+                           num_state_variables=len(label_keys),
                            fully_supervised=(args.method == "supervised"),
                            representation_len=representation_len, l1_regularization=False)
 
     trainer.train(tr_dl, val_dl)
     test_acc, test_f1score = trainer.test(test_dl)
-    #weights = trainer.get_weights()
-    if args.method == "stdim":
-        test_f1_dict = dict(zip(label_keys, test_f1score))
-        postprocess_and_log_metrics(test_f1_dict, prefix="stdim_",
-                                    suffix="_f1")
-    else:
-        acc_array = np.asarray(test_acc).reshape(num_state_variables, num_slots).transpose(1, 0)
-        f1_array = np.asarray(test_f1score).reshape(num_state_variables, num_slots).transpose(1, 0)
-        f1s = [dict(zip(label_keys, f1)) for f1 in f1_array]
-
-        slotwise_expl_df = pd.DataFrame(f1s)
-        slotwise_expl_dict = {col: slotwise_expl_df.values[:, i] for i, col in enumerate(slotwise_expl_df.columns)}
-        log_metrics(slotwise_expl_dict, prefix="slotwise_", suffix="_f1")
-
-        best_slot_expl = dict(slotwise_expl_df.max())
-        postprocess_and_log_metrics(best_slot_expl, prefix="best_slot_",
-                                    suffix="_f1")
+    weights = trainer.get_weights()
+    test_f1_dict = dict(zip(label_keys, test_f1score))
+    postprocess_and_log_metrics(test_f1_dict, prefix="concat_",
+                                suffix="_f1")
 
 
-        f1_np = slotwise_expl_df.to_numpy()
-        row_ind, col_ind = lsa(-f1_np)
-        inds = list(zip(row_ind, col_ind))
-        matched_slot_expl = {slotwise_expl_df.columns[factor_num]: f1_np[slot_num, factor_num] for
-                             (slot_num, factor_num) in inds}
-        postprocess_and_log_metrics(matched_slot_expl, prefix="matched_slot_",
-                                    suffix="_f1")
+    # else:
+    #     acc_array = np.asarray(test_acc).reshape(num_state_variables, num_slots).transpose(1, 0)
+    #     f1_array = np.asarray(test_f1score).reshape(num_state_variables, num_slots).transpose(1, 0)
+    #     f1s = [dict(zip(label_keys, f1)) for f1 in f1_array]
+    #
+    #     slotwise_expl_df = pd.DataFrame(f1s)
+    #     slotwise_expl_dict = {col: slotwise_expl_df.values[:, i] for i, col in enumerate(slotwise_expl_df.columns)}
+    #     log_metrics(slotwise_expl_dict, prefix="slotwise_", suffix="_f1")
+    #
+    #     best_slot_expl = dict(slotwise_expl_df.max())
+    #     postprocess_and_log_metrics(best_slot_expl, prefix="best_slot_",
+    #                                 suffix="_f1")
+    #
+    #
+    #     f1_np = slotwise_expl_df.to_numpy()
+    #     row_ind, col_ind = lsa(-f1_np)
+    #     inds = list(zip(row_ind, col_ind))
+    #     matched_slot_expl = {slotwise_expl_df.columns[factor_num]: f1_np[slot_num, factor_num] for
+    #                          (slot_num, factor_num) in inds}
+    #     postprocess_and_log_metrics(matched_slot_expl, prefix="matched_slot_",
+    #                                 suffix="_f1")
 
 
 
