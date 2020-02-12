@@ -75,6 +75,7 @@ def get_argparser():
 
 def do_epoch(loader, optimizer, model, epoch):
     total_loss = 0.
+    total_acc = 0.
     for batch_idx, data_batch in enumerate(loader):
         data_batch = [tensor.to(device) for tensor in data_batch]
         optimizer.zero_grad()
@@ -218,13 +219,13 @@ if __name__ == "__main__":
             model.train()
             train_loss = 0
             tr_loss = do_epoch(tr_loader, optimizer, model, epoch)
-            wandb.log({"tr_loss": tr_loss})
+            wandb.log({"tr_epoch_loss": tr_loss})
             print('====> Epoch: {} Train average loss: {:.6f}'.format(
                 epoch, tr_loss))
 
             model.eval()
             val_loss = do_epoch(val_loader, optimizer, model, epoch)
-            wandb.log({"val_loss": val_loss})
+            wandb.log({"val_epoch_loss": val_loss})
             print('====> \t Val average loss: {:.6f}'.format(
                 val_loss))
             if val_loss < best_loss:

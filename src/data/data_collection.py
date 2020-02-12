@@ -25,7 +25,8 @@ def get_transitions(args, seed=42, keep_as_episodes=True, min_episode_length=8, 
     stop_collecting = False
     frame_count = 0
     while not stop_collecting:
-        print("Episode %i"%(len(frames)))
+        if len(frames) % 5:
+            print("Episode %i"%(len(frames)))
         done = False
         env.reset()
         ep_frames = []

@@ -22,8 +22,8 @@ def get_stdim_train_dataloader(args):
     tr_dataset = EpisodeDataset(tr_eps, tr_actions)
     val_dataset = EpisodeDataset(val_eps, val_actions)
 
-    tr_dl = DataLoader(tr_dataset, batch_size=args.batch_size, shuffle=True)
-    val_dl = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
+    tr_dl = DataLoader(tr_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
+    val_dl = DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     return tr_dl, val_dl
 
 def get_stdim_eval_dataloader(args):

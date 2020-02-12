@@ -183,8 +183,8 @@ def get_cswm_train_dataloader(args):
     tr_dataset = EpisodeDataset(tr_eps, tr_actions)
     val_dataset = EpisodeDataset(val_eps, val_actions)
 
-    tr_dl = data.DataLoader(tr_dataset, batch_size=args.batch_size, shuffle=True)
-    val_dl = data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True)
+    tr_dl = data.DataLoader(tr_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
+    val_dl = data.DataLoader(val_dataset, batch_size=args.batch_size, shuffle=True, drop_last=True)
     return tr_dl, val_dl
 
 

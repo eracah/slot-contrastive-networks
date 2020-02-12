@@ -134,7 +134,7 @@ def calculate_accuracy(logits, labels, argmax=True):
         preds = logits
     correct_or_not = (preds == labels).astype(int)
     acc = np.mean(correct_or_not)
-    return acc, correct_or_not
+    return acc
 
 def log_metrics(dic, prefix, suffix):
     dic = prepend_prefix(dic, prefix)
