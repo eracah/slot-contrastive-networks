@@ -33,24 +33,24 @@ envs = ['asteroids',
 'boxing',
 'breakout',
 'demon_attack',
-'freeway',
+#'freeway',
 'frostbite',
 'hero',
 'montezuma_revenge',
-'ms_pacman',
+#'ms_pacman',
 'pitfall',
-'pong',
+#'pong',
 'private_eye',
 'qbert',
 'riverraid',
 'seaquest',
-'space_invaders',
+#'space_invaders',
 'tennis',
 'venture',
 'video_pinball',
 'yars_revenge']
 
-envs = ['pong', 'space_invaders', 'ms_pacman']
+#envs = ['pong', 'space_invaders', 'ms_pacman']
 if args.envs != "None":
     envs = args.envs
 
