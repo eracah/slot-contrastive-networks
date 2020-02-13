@@ -133,7 +133,7 @@ class ProbeTrainer(object):
         return acc, f1
 
     def get_weights(self):
-        return self.probe.weight.detach().numpy()
+        return self.probe.weight.detach().cpu().numpy()
 
     def log_results(self, epoch_idx, **kwargs):
         sys.stderr.write("Epoch: {}\n".format(epoch_idx))
