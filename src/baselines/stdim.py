@@ -25,7 +25,11 @@ class STDIMModel(nn.Module):
         # Loss 1: Global at time t, f5 patches at time t-1
         glob_score = self.score_fxn1(f_t)
         local_flattened = fmap_tp1.reshape(-1, d)
+        # [N*sy*sx, d] @  [d, N] = [N*sy*sx, N ] -> dot product of every global vector in batch with local voxel at all spatial locations for all examples in the batch
+        # then reshape to sy*sx, N, N then to sy*sx*N, N
         logits1 = torch.matmul(local_flattened, glob_score.t()).reshape(N, sy * sx, -1).transpose(1, 0).reshape(-1, N)
+        # we now have sy*sx N x N matrices where the diagonals correspond to dot product between pairs consecutive in time at the same bagtch index
+        # aka the ocrrect answer. So the correct logit index is the diagonal sx*sy times
         target1 = torch.arange(N).repeat(sx * sy).to(self.device)
         loss1 = nn.CrossEntropyLoss()(logits1, target1)
 
