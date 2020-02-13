@@ -26,7 +26,7 @@ class STDIMModel(nn.Module):
         glob_score = self.score_fxn1(f_t)
         local_flattened = fmap_tp1.reshape(-1, d)
         logits1 = torch.matmul(local_flattened, glob_score.t()).reshape(N, sy * sx, -1).transpose(1, 0).reshape(-1, N)
-        target1 = torch.arange(N).repeat(sx * sy)
+        target1 = torch.arange(N).repeat(sx * sy).to(self.device)
         loss1 = nn.CrossEntropyLoss()(logits1, target1)
 
 
@@ -35,7 +35,7 @@ class STDIMModel(nn.Module):
         transformed_local_t = local_t_score.reshape(N, sy*sx,d).transpose(0,1)
         local_tp1 = fmap_tp1.reshape(N, sy * sx, d).transpose(0, 1)
         logits2 = torch.matmul(transformed_local_t, local_tp1.transpose(1, 2)).reshape(-1, N)
-        target2 = torch.arange(N).repeat(sx * sy)
+        target2 = torch.arange(N).repeat(sx * sy).to(self.device)
         loss2 = nn.CrossEntropyLoss()(logits2, target2)
 
         loss = loss1 + loss2
