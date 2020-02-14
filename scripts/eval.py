@@ -36,27 +36,25 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
     parser.add_argument('--epochs', type=int, default=300, help='Number of epochs for  (default: 100)')
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
-    parser.add_argument("--train-run-parent-dir", type=str, default=".")
-    parser.add_argument("--train-run-dirname", type=str)
+    parser.add_argument("--wandb-train-name", type=str)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
     args = parser.parse_args()
 
+    wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["eval"])
 
-
-    if args.train_run_dirname is None:
-        list_of_files = [f for f in glob.glob(args.train_run_parent_dir + "/*") if os.path.isdir(f) and "run" in os.path.basename(f)]  # * means all if need specific format then *.csv
-        latest_file = max(list_of_files, key=os.path.getctime)
-        args.train_run_dirname = Path(latest_file).name
-
-
-    train_run_path = Path(args.train_run_parent_dir) / Path(args.train_run_dirname)
-    weights_path = train_run_path / Path("encoder.pt")
-    args_path = train_run_path / "wandb-metadata.json"
-    train_args = json.load(open(args_path))["args"]
+    # list_of_files = [f for f in glob.glob(args.train_run_parent_dir + "/*") if os.path.isdir(f) and "run" in os.path.basename(f)]  # * means all if need specific format then *.csv
+    # latest_file = max(list_of_files, key=os.path.getctime)
+    # args.train_run_dirname = Path(latest_file).name
+    api = wandb.Api()
+    run = api.run(path="/".join([wandb.run.entity, args.wandb_proj, args.wandb_train_name]))
+    json_obj = run.file(name="wandb-metadata.json").download(root=wandb.run.dir + "/train_run", replace=True)
+    train_args = json.load(open(json_obj.name))["args"]
+    file_obj = run.file(name="encoder.pt").download(root=wandb.run.dir, replace=True)
+    weights_path = file_obj.name
 
     train_parser = get_train_argparser()
-    train_args, unknown = train_parser.parse_known_args(train_args)
+    train_args = train_parser.parse_args(train_args)
 
     for k, v in vars(train_args).items():
         if k in args:
@@ -64,7 +62,6 @@ if __name__ == "__main__":
         else:
             args.__dict__[k] = v
 
-    wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["eval"])
     wandb.config.update(vars(args))
 
     if args.regime == "stdim":
@@ -78,7 +75,7 @@ if __name__ == "__main__":
 
     encoder = get_encoder(args, sample_frame)
     print("Loading weights from %s" % weights_path)
-    encoder.load_state_dict(torch.load(weights_path))
+    encoder.load_state_dict(torch.load(weights_path, map_location=device))
     encoder.to(device)
     encoder.eval()
     if args.method != "stdim":
@@ -109,17 +106,18 @@ if __name__ == "__main__":
     trainer.train(tr_dl, val_dl)
     test_acc, test_f1score = trainer.test(test_dl)
     weights = trainer.get_weights()
+    np.save(wandb.run.dir + "/probe_weights.npy", weights)
     heatmaps = np.abs(np.mean(weights.reshape(len(label_keys), 256, representation_len), axis=1))
     normalized_heatmaps = (heatmaps - np.min(heatmaps,axis=1,keepdims=True)) / (np.max(heatmaps,axis=1,keepdims=True) - np.min(heatmaps,axis=1,keepdims=True) )
     num_ticks = representation_len // args.embedding_dim
-    plt.figure(figsize=[len(label_keys), len(label_keys) // 2])
+    plt.figure(figsize=[7,4])
     plt.imshow(normalized_heatmaps, origin="lower", cmap="jet", aspect="auto")
     plt.gca().xaxis.set_major_locator(MultipleLocator(args.embedding_dim))
     plt.gca().xaxis.grid(True)
     plt.xticks(np.linspace(0, representation_len, num_ticks + 1), [''] * (num_ticks+1))
     plt.gca().xaxis.set_tick_params(width=2,length=len(label_keys))
     plt.gca().yaxis.set_major_locator(MultipleLocator(1.0))
-    plt.yticks(np.arange(len(label_keys)), label_keys, fontsize=16.0)
+    plt.yticks(np.arange(len(label_keys)), label_keys, fontsize=6)
     plt.colorbar(orientation="horizontal", pad=0.2)
     plot_name = "heatmap"
     wandb.log({plot_name: plt})
