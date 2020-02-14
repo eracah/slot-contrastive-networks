@@ -112,7 +112,7 @@ if __name__ == "__main__":
     heatmaps = np.abs(np.mean(weights.reshape(len(label_keys), 256, representation_len), axis=1))
     normalized_heatmaps = (heatmaps - np.min(heatmaps,axis=1,keepdims=True)) / (np.max(heatmaps,axis=1,keepdims=True) - np.min(heatmaps,axis=1,keepdims=True) )
     num_ticks = representation_len // args.embedding_dim
-    plt.figure(figsize=[7,4])
+    plt.figure(figsize=[14,8])
     plt.imshow(normalized_heatmaps, origin="lower", cmap="jet", aspect="auto")
     plt.gca().xaxis.set_major_locator(MultipleLocator(args.embedding_dim))
     plt.gca().xaxis.grid(True)
