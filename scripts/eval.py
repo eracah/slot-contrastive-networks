@@ -36,7 +36,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
     parser.add_argument('--epochs', type=int, default=300, help='Number of epochs for  (default: 100)')
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
-    parser.add_argument("--wandb-train-name", type=str)
+    parser.add_argument("--wandb-tr-id", type=str)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
     args = parser.parse_args()
@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # latest_file = max(list_of_files, key=os.path.getctime)
     # args.train_run_dirname = Path(latest_file).name
     api = wandb.Api()
-    run = api.run(path="/".join([wandb.run.entity, args.wandb_proj, args.wandb_train_name]))
+    run = api.run(path="/".join([wandb.run.entity, args.wandb_proj, args.wandb_tr_id]))
     json_obj = run.file(name="wandb-metadata.json").download(root=wandb.run.dir + "/train_run", replace=True)
     train_args = json.load(open(json_obj.name))["args"]
     file_obj = run.file(name="encoder.pt").download(root=wandb.run.dir, replace=True)
