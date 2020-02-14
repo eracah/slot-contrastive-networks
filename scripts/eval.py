@@ -47,7 +47,7 @@ if __name__ == "__main__":
     # latest_file = max(list_of_files, key=os.path.getctime)
     # args.train_run_dirname = Path(latest_file).name
     api = wandb.Api()
-    path = "/".join([wandb.run.entity, args.wandb_proj, args.wandb_tr_id])
+    path = "/".join(["eracah", args.wandb_proj, args.wandb_tr_id])
     print(path)
     run = api.run(path=path)
     json_obj = run.file(name="wandb-metadata.json").download(root=wandb.run.dir + "/train_run", replace=True)
