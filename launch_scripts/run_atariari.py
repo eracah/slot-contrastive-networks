@@ -14,7 +14,7 @@ parser.add_argument('--envs', type=str, nargs="+", default='None')
 parser.add_argument('--epochs',type=int, default= 600)
 parser.add_argument('--batch-size', default=1024, type=int)
 parser.add_argument("--eval", action='store_true', default=False)
-parser.add_argument("--ids", type=str, default="None")
+parser.add_argument("--ids", type=str, nargs="+", default="None")
 args = parser.parse_args()
 base_cmd = args.base_cmd
 if args.unkillable:
