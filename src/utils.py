@@ -360,7 +360,7 @@ class EarlyStopping(object):
         self.name = name
 
 
-    def __call__(self, val_acc, model):
+    def __call__(self, val_acc):
 
         score = val_acc
 

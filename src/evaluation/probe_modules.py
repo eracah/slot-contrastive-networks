@@ -35,6 +35,8 @@ class ProbeTrainer(object):
                  epochs = 100,
                  batch_size = 64,
                  representation_len = 256,
+                 num_slots =1,
+                 per_probe_early_stop=True,
                  l1_regularization=False):
 
         self.encoder = encoder
@@ -46,6 +48,8 @@ class ProbeTrainer(object):
         self.num_classes = num_classes
         self.epochs = epochs
         self.lr = lr
+        self.per_probe_early_stop = per_probe_early_stop
+        self.num_slots = num_slots
         self.batch_size = batch_size
         self.patience = patience
         self.method = method_name
@@ -57,9 +61,16 @@ class ProbeTrainer(object):
 
         self.probe = nn.Linear(self.representation_len, self.num_classes * self.num_state_variables).to(self.device)
 
-        # self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, save_dir=self.save_dir)
-        self.optimizer = torch.optim.Adam(list(self.probe.parameters()),
-                                               eps=1e-5, lr=self.lr)
+        if self.per_probe_early_stop:
+            self.early_stoppers = [ [ EarlyStopping(patience=self.patience, name="slot_%i_label_%i"%(s, l)) for s in range(self.num_slots)  ]\
+                                    for l in range(self.num_state_variables)  ]
+        else:
+            self.early_stoppers = EarlyStopping(patience=self.patience,name="total_loss")
+
+        parameters = list(self.probe.parameters())
+        if self.fully_supervised:
+            parameters += self.encoder.parameters()
+        self.optimizer = torch.optim.Adam(parameters,eps=1e-5, lr=self.lr)
         # self.scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(self.optimizer, patience=5, factor=0.2, verbose=True, mode='max', min_lr=1e-5)
 
 
@@ -87,11 +98,23 @@ class ProbeTrainer(object):
             frames = x.float().to(self.device) / 255.
             labels = y.long().to(self.device)
             preds = self.do_probe(frames)
-            lbls = labels[:, :, None].repeat(1, 1, preds.shape[3]).squeeze() # for if preds has another dimension for slot encoders for example
-            loss = nn.CrossEntropyLoss()(preds.squeeze(), lbls)
-            if self.l1_regularization:
-                l1_norm = torch.norm(self.probe.weight, p=1)
-                loss = loss + l1_norm
+            lbls = labels[:, :, None].repeat(1, 1, preds.shape[3]) # for if preds has another dimension for slot encoders for example
+            loss_terms = nn.CrossEntropyLoss(reduction="none")(preds, lbls)
+            if self.probe.training and self.per_probe_early_stop:
+                lt = []
+                for sv in range(self.num_state_variables):
+                    for sl in range(self.num_slots):
+                        if self.early_stoppers[sv][sl].early_stop:
+                            loss_term = loss_terms[:,sv, sl].detach()
+                        else:
+                            loss_term = loss_terms[:, sv, sl]
+                        lt.append(loss_term)
+                loss_terms = torch.stack(lt)
+            loss = loss_terms.mean()
+
+            # if self.l1_regularization:
+            #     l1_norm = torch.norm(self.probe.weight, p=1)
+            #     loss = loss + l1_norm
             if self.probe.training:
                 self.optimizer.zero_grad()
                 loss.backward()
@@ -117,15 +140,29 @@ class ProbeTrainer(object):
 
     def train(self, tr_dl, val_dl):
         epoch = 0
-        while epoch < self.epochs:
-            self.probe.train()
-            epoch_loss, accuracy, _ = self.do_one_epoch(tr_dl)
-            self.probe.eval()
-            val_loss, val_accuracy, _ = self.do_one_epoch(val_dl)
-            self.log_results(epoch, tr_loss=epoch_loss, val_loss=val_loss)
 
+        while epoch < self.epochs:
+            es = []
+            self.probe.train()
+            epoch_loss, accuracies, _ = self.do_one_epoch(tr_dl)
+            self.probe.eval()
+            val_loss, val_accuracies, _ = self.do_one_epoch(val_dl)
+            val_accuracies = np.asarray(val_accuracies).reshape(self.num_state_variables, self.num_slots)
+            if self.per_probe_early_stop:
+                for sv in range(self.num_state_variables):
+                    for sl in range(self.num_slots):
+                        self.early_stoppers[sv][sl](val_accuracies[sv, sl])
+                        es.append(self.early_stoppers[sv][sl].early_stop)
+            else:
+                self.early_stoppers(np.mean(val_accuracies))
+                es.append(self.early_stoppers.early_stop)
+            self.log_results(epoch, tr_loss=epoch_loss, val_loss=val_loss)
             epoch += 1
+            if all(es):
+                break
         sys.stderr.write("Probe done!\n")
+
+        torch.save(self.probe.state_dict(), self.wandb.run.dir + "/probe.pt")
 
     def test(self, test_dl):
         self.probe.eval()
