@@ -17,14 +17,18 @@ parser.add_argument("--eval", action='store_true', default=False)
 parser.add_argument("--ids", type=str, nargs="+", default="None")
 args = parser.parse_args()
 base_cmd = args.base_cmd
-if args.unkillable:
-    file = "unkillable_mila_cluster.sl"
-elif args.main:
-    file = "main_mila_cluster.sl"
-elif args.eval:
-    file = "just_eval_mila_cluster.sl"
+if args.eval:
+    if args.unkillable:
+        file =  "unkillable_just_eval_mila_cluster.sl"
+    else:
+        file = "just_eval_mila_cluster.sl"
 else:
-    file = "mila_cluster.sl"
+    if args.unkillable:
+        file = "unkillable_mila_cluster.sl"
+    elif args.main:
+        file = "main_mila_cluster.sl"
+    else:
+        file = "mila_cluster.sl"
 ss= "launch_scripts/" + file
 
 # module = "scripts.run_probe"
@@ -37,18 +41,18 @@ envs = ['asteroids',
 'boxing',
 'breakout',
 'demon_attack',
-#'freeway',
+'freeway',
 'frostbite',
 'hero',
 'montezuma_revenge',
-#'ms_pacman',
+'ms_pacman',
 'pitfall',
-#'pong',
+'pong',
 'private_eye',
 'qbert',
 'riverraid',
 'seaquest',
-#'space_invaders',
+'space_invaders',
 'tennis',
 'venture',
 'video_pinball',
