@@ -10,6 +10,7 @@ import torch.nn as nn
 from src import cswm_utils
 import logging
 import gym
+import os
 # methods that need encoder trained before
 ablations = ["nce", "hybrid", "loss1-only", "loss2-only", "none"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
@@ -158,22 +159,11 @@ if __name__ == "__main__":
 
 
     if args.method == "supervised":
-        from atariari.benchmark.probe import ProbeTrainer
-        tr_dl, val_dl, test_dl, label_keys = dataloaders
-        sample_label = next(tr_dl.__iter__())[-1]
+        from src.baselines.slot_supervised import SupervisedModel
+        tr_loader, val_loader, test_dl, label_keys = dataloaders
+        sample_label = next(tr_loader.__iter__())[-1]
         num_state_variables = sample_label.shape[1]
-        trainer = ProbeTrainer(encoder=encoder,
-                               epochs=args.epochs,
-                               lr =args.lr,
-                               num_state_variables= num_state_variables,
-                               patience=args.patience,
-                               batch_size=args.batch_size,
-                               fully_supervised=True,
-                               representation_len=args.embedding_dim)
-        trainer.train(tr_dl, val_dl)
-        test_acc, test_f1 = trainer.test(test_dl)
-        torch.save(encoder.state_dict(), wandb.run.dir + "/encoder.pt")
-
+        model = SupervisedModel(args, encoder,  device=device, wandb=wandb, num_state_variables=num_state_variables).to(device)
     else:
         tr_loader, val_loader = dataloaders
 
@@ -206,29 +196,29 @@ if __name__ == "__main__":
             assert False
 
 
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=args.lr)
+    optimizer = torch.optim.Adam(
+        model.parameters(),
+        lr=args.lr)
 
-        # Train model.
-        print('Starting model training...')
-        step = 0
-        best_loss = 1e9
+    # Train model.
+    print('Starting model training...')
+    step = 0
+    best_loss = 1e9
 
-        for epoch in range(1, args.epochs + 1):
-            model.train()
-            train_loss = 0
-            tr_loss = do_epoch(tr_loader, optimizer, model, epoch)
-            wandb.log({"tr_epoch_loss": tr_loss})
-            print('====> Epoch: {} Train average loss: {:.6f}'.format(
-                epoch, tr_loss))
+    for epoch in range(1, args.epochs + 1):
+        model.train()
+        train_loss = 0
+        tr_loss = do_epoch(tr_loader, optimizer, model, epoch)
+        wandb.log({"tr_epoch_loss": tr_loss})
+        print('====> Epoch: {} Train average loss: {:.6f}'.format(
+            epoch, tr_loss))
 
-            model.eval()
-            val_loss = do_epoch(val_loader, optimizer, model, epoch)
-            wandb.log({"val_epoch_loss": val_loss})
-            print('====> \t Val average loss: {:.6f}'.format(
-                val_loss))
-            if val_loss < best_loss:
-                best_loss = val_loss
-                torch.save(model.encoder.state_dict(), wandb.run.dir + "/encoder.pt")
+        model.eval()
+        val_loss = do_epoch(val_loader, optimizer, model, epoch)
+        wandb.log({"val_epoch_loss": val_loss})
+        print('====> \t Val average loss: {:.6f}'.format(
+            val_loss))
+        if val_loss < best_loss:
+            best_loss = val_loss
+            torch.save(model.encoder.state_dict(), wandb.run.dir + "/encoder.pt")
 

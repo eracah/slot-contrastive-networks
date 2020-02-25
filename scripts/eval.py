@@ -71,7 +71,9 @@ if __name__ == "__main__":
     elif args.regime == "cswm":
         dataloaders = get_cswm_dataloader(args, mode="eval")
 
+    representation_len = args.embedding_dim if args.method == "stdim" else args.num_slots * args.embedding_dim
     tr_dl, val_dl, test_dl, label_keys = dataloaders
+    wandb.summary.update(dict(label_keys=label_keys))
     sample_frame = next(tr_dl.__iter__())[0]
     print_memory("after episodes loaded")
 
@@ -80,28 +82,28 @@ if __name__ == "__main__":
     encoder.load_state_dict(torch.load(weights_path, map_location=device))
     encoder.to(device)
     encoder.eval()
+
+    print_memory("after encoder trained/loaded")
+    f1s = []
     if args.method != "stdim":
         encoder = ConcatenateSlots(encoder)
-    print_memory("after encoder trained/loaded")
-
-    # for probe_type in ["linear", "mlp"]:
-    #     attn_probe = AttentionProbeTrainer(encoder=encoder, epochs=args.epochs, lr=args.lr, type=probe_type)
-    #     scores, importances_df = attn_probe.train_test(x_tr, x_val, y_tr, y_val, x_test, y_test)
-    #     imp_dict = {col: importances_df.values[:, i] for i, col in enumerate(importances_df.columns)}
-    #     log_metrics(imp_dict, prefix="%s_attn_probe_"%probe_type, suffix="_weights")
-    #     log_metrics(scores, prefix="%s_attn_probe_"%probe_type, suffix="_f1")
+        representation_len = args.num_slots * args.embedding_dim
+    else:
+        representation_len = args.embedding_dim
+    #num_slots = args.num_slots
+    #representation_len = args.embedding_dim
+    num_slots = 1
 
 
-    f1s = []
-    representation_len = args.embedding_dim if args.method == "stdim" else args.num_slots * args.embedding_dim
-    num_slots = args.num_slots
     trainer = ProbeTrainer(encoder=encoder,
                            wandb=wandb,
                            epochs=args.epochs,
                            lr=args.lr,
+                           patience=args.patience,
                            batch_size=args.batch_size,
                            num_state_variables=len(label_keys),
                            fully_supervised=(args.method == "supervised"),
+                           num_slots = num_slots,
                            representation_len=representation_len, l1_regularization=False)
 
 
@@ -109,24 +111,11 @@ if __name__ == "__main__":
     test_acc, test_f1score = trainer.test(test_dl)
     weights = trainer.get_weights()
     np.save(wandb.run.dir + "/probe_weights.npy", weights)
-    heatmaps = np.abs(np.mean(weights.reshape(len(label_keys), 256, representation_len), axis=1))
-    normalized_heatmaps = (heatmaps - np.min(heatmaps,axis=1,keepdims=True)) / (np.max(heatmaps,axis=1,keepdims=True) - np.min(heatmaps,axis=1,keepdims=True) )
-    num_ticks = representation_len // args.embedding_dim
-    plt.figure(figsize=[14,8])
-    plt.imshow(normalized_heatmaps, origin="lower", cmap="jet", aspect="auto")
-    plt.gca().xaxis.set_major_locator(MultipleLocator(args.embedding_dim))
-    plt.gca().xaxis.grid(True)
-    plt.xticks(np.linspace(0, representation_len, num_ticks + 1), [''] * (num_ticks+1))
-    plt.gca().xaxis.set_tick_params(width=2,length=len(label_keys))
-    plt.gca().yaxis.set_major_locator(MultipleLocator(1.0))
-    plt.yticks(np.arange(len(label_keys)), label_keys, fontsize=6)
-    plt.colorbar(orientation="horizontal", pad=0.2)
-    plot_name = "heatmap"
-    wandb.log({plot_name: plt})
-    plt.savefig(Path(wandb.run.dir) / Path(plot_name + ".png" ))
     test_f1_dict = dict(zip(label_keys, test_f1score))
     postprocess_and_log_metrics(test_f1_dict, prefix="concat_",
                                 suffix="_f1")
+
+
 
 
     # else:
