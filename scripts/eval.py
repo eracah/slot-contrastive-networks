@@ -73,7 +73,7 @@ if __name__ == "__main__":
 
     representation_len = args.embedding_dim if args.method == "stdim" else args.num_slots * args.embedding_dim
     tr_dl, val_dl, test_dl, label_keys = dataloaders
-    wandb.summary.update(dict(label_keys=label_keys))
+    wandb.run.summary.update(dict(label_keys=label_keys))
     sample_frame = next(tr_dl.__iter__())[0]
     print_memory("after episodes loaded")
 
