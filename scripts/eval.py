@@ -56,9 +56,9 @@ if __name__ == "__main__":
     weights_path = file_obj.name
 
     train_parser = get_train_argparser()
-    train_args = train_parser.parse_args(train_args)
+    train_args = run.config
 
-    for k, v in vars(train_args).items():
+    for k, v in train_args.items():
         if k in args:
             args.__dict__["train_" + k] = v
         else:
@@ -77,7 +77,7 @@ if __name__ == "__main__":
     sample_frame = next(tr_dl.__iter__())[0]
     print_memory("after episodes loaded")
 
-    encoder = get_encoder(args, sample_frame)
+    encoder = get_encoder(args, sample_frame=sample_frame)
     print("Loading weights from %s" % weights_path)
     encoder.load_state_dict(torch.load(weights_path, map_location=device))
     encoder.to(device)
@@ -102,8 +102,8 @@ if __name__ == "__main__":
                            patience=args.patience,
                            batch_size=args.batch_size,
                            num_state_variables=len(label_keys),
-                           fully_supervised=(args.method == "supervised"),
-                           num_slots = num_slots,
+                           fully_supervised=False,
+                           num_slots=num_slots,
                            representation_len=representation_len, l1_regularization=False)
 
 

@@ -65,6 +65,8 @@ def get_argparser():
                         help='Apply same action to all object slots.')
     parser.add_argument('--no-cuda', action='store_true', default=False,
                         help='Disable CUDA training.')
+    parser.add_argument('--regression', action='store_true', default=False,
+                        help='whether to use regression for supervised')
     # parser.add_argument('--seed', type=int, default=42,
     #                     help='Random seed (default: 42).')
     # parser.add_argument('--name', type=str, default='none',
@@ -117,7 +119,7 @@ def get_encoder(args, sample_frame):
         width_height = np.asarray(sample_frame.shape[2:])
         obj_extractor = EncoderCNNMedium(input_dim=input_channels,
                                         hidden_dim=args.hidden_dim // 16,
-                                        num_objects=args.num_slots)
+                                        num_objects=num_slots)
         slot_mlp = EncoderMLP(input_dim=np.prod(width_height // 5),
                                   output_dim=args.embedding_dim,
                                   hidden_dim=args.hidden_dim,
@@ -133,9 +135,7 @@ if __name__ == "__main__":
     parser = get_argparser()
     args = parser.parse_args()
     wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["train"])
-    config = {}
-    config.update(vars(args))
-    wandb.config.update(config)
+    wandb.config.update(vars(args))
     log_file = os.path.join(wandb.run.dir, 'log.txt')
     logging.basicConfig(level=logging.WARN, format='%(message)s')
     logger = logging.getLogger()
@@ -150,21 +150,24 @@ if __name__ == "__main__":
     if args.regime == "stdim":
         dataloaders = get_stdim_dataloader(args, mode="eval" if args.method == "supervised" else "train")
     elif args.regime == "cswm":
-        dataloaders = get_cswm_dataloader(args,mode="eval" if args.method == "supervised" else "train")
+        dataloaders = get_cswm_dataloader(args, mode="eval" if args.method == "supervised" else "train")
     else:
         assert False
 
     sample_frame = next(dataloaders[0].__iter__())[0]
-    encoder = get_encoder(args, sample_frame)
-
 
     if args.method == "supervised":
         from src.baselines.slot_supervised import SupervisedModel
         tr_loader, val_loader, test_dl, label_keys = dataloaders
+        wandb.run.summary.update(dict(label_keys=label_keys))
         sample_label = next(tr_loader.__iter__())[-1]
         num_state_variables = sample_label.shape[1]
-        model = SupervisedModel(args, encoder,  device=device, wandb=wandb, num_state_variables=num_state_variables).to(device)
+        args.num_slots = num_state_variables
+        wandb.config.update(vars(args),allow_val_change=True)
+        encoder = get_encoder(args, num_slots=args.num_slots, sample_frame=sample_frame)
+        model = SupervisedModel(args, encoder, label_keys=label_keys,  device=device, regression=args.regression, wandb=wandb, num_state_variables=num_state_variables).to(device)
     else:
+        encoder = get_encoder(args, args.num_slots, sample_frame)
         tr_loader, val_loader = dataloaders
 
         if args.method == "cswm":

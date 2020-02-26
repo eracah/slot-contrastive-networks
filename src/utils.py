@@ -6,7 +6,6 @@ import subprocess
 import torch
 import numpy as np
 from sklearn.metrics import f1_score as compute_f1_score
-from atariari.benchmark.envs import get_vec_normalize
 from collections import defaultdict
 from pathlib import Path
 import psutil
