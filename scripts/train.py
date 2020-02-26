@@ -164,7 +164,7 @@ if __name__ == "__main__":
         num_state_variables = sample_label.shape[1]
         args.num_slots = num_state_variables
         wandb.config.update(vars(args),allow_val_change=True)
-        encoder = get_encoder(args, num_slots=args.num_slots, sample_frame=sample_frame)
+        encoder = get_encoder(args, sample_frame=sample_frame)
         model = SupervisedModel(args, encoder, label_keys=label_keys,  device=device, regression=args.regression, wandb=wandb, num_state_variables=num_state_variables).to(device)
     else:
         encoder = get_encoder(args, args.num_slots, sample_frame)
