@@ -2,11 +2,13 @@ import torch
 import torch.nn as nn
 import numpy as np
 from src.utils import EarlyStopping, appendabledict, append_suffix
-from src.utils import calculate_accuracy
+from src.utils import calculate_accuracy, calculate_multiple_accuracies
 from torch.utils.data import DataLoader, TensorDataset
 
 class SupervisedModel(nn.Module):
-    def __init__(self,  args, encoder,  num_state_variables, num_classes=256, device=torch.device('cpu'), wandb=None):
+    """Trains slot based encoder in a fully supervised way
+       Assigning one state variable to each slot and training in a simultaneous multi-task way"""
+    def __init__(self,  args, encoder,  num_state_variables, label_keys, regression=False, num_classes=256, device=torch.device('cpu'), wandb=None):
         super().__init__()
 
         self.args = args
@@ -19,32 +21,61 @@ class SupervisedModel(nn.Module):
         self.num_state_variables = num_state_variables
         self.num_classes = num_classes
         self.representation_len = args.embedding_dim
-        self.probe = nn.Linear(self.representation_len, self.num_classes * self.num_state_variables).to(self.device)
+        self.label_keys = label_keys
+        self.regression = regression
+        if self.regression:
+            self.loss_fn = nn.SmoothL1Loss(reduction="none") # reduction = none so we can see every state variable's loss
+            # one regressor for each state variable
+            self.probe = nn.Linear(self.representation_len, self.num_state_variables).to(self.device)
+        else:
+            self.loss_fn = nn.CrossEntropyLoss(reduction="none") # reduction = none so we can see every state variable's loss
+            self.probe = nn.Linear(self.representation_len, self.num_classes * self.num_state_variables).to(self.device)
 
 
     def forward(self, x):
         x = x / 255.
         slots = self.encoder(x)
         batch_size, *rest = slots.shape
+        # apply every regressor/classifier to every slot (later we will index out one unique state variable prediction per slot)
         preds = self.probe(slots)
-        preds = preds.reshape(batch_size, -1, self.num_state_variables, self.num_classes)
-        preds = preds.transpose(1, 3)
+        if not self.regression:
+            # reshape to include logits for every slot for every state variable
+            preds = preds.reshape(batch_size, -1, self.num_state_variables, self.num_classes)
+            preds = preds.permute(0,3,1,2)
+            #index out the diagonals so each slot has logits for its own particular state variable
+            preds = torch.stack([preds[:,:, i, i] for i in range(self.num_state_variables)], axis=2)
+        else:
+            # index out the diagonals so each slot has a regression prediction for its own particular state variable
+            preds = torch.stack([torch.diag(pred) for pred in preds])
         return preds
 
     def calc_loss(self, x, y):
         preds = self.forward(x)
-        lbls = y[:, :, None].repeat(1, 1, preds.shape[3])  # for if preds has another dimension for slot encoders for example
-        loss = nn.CrossEntropyLoss()(preds, lbls)
-        #acc = calculate_multiple_accuracies(preds_tensor, labels_tensor)
+        losses = self.loss_fn(preds,y)
+
+        mode = "tr" if self.training else "val"
+        # for logging purposes capture loss per state variable
+        sv_losses = losses.mean(axis=0).detach().cpu().numpy()
+        loss_keys = [k + "_" + mode + "_loss" for k in self.label_keys]
+        sv_accs = calculate_multiple_accuracies(preds.detach().cpu().numpy().argmax(axis=1), y.detach().cpu().numpy())
+        acc_keys = [k + "_" + mode + "_acc" for k in self.label_keys]
+        avg_acc = np.mean(sv_accs)
+        self.wandb.log(dict(zip(loss_keys,sv_losses)))
+        self.wandb.log(dict(zip(acc_keys, sv_accs)))
+        self.wandb.log({mode + "_acc": avg_acc})
+
+
+        #main loss is mean over batch and every state variable
+        loss = losses.mean()
         return loss
 
 
-    # def create_slot_classifiers(self, sample_label):
     #     num_state_vars = len(sample_label)
     #     self.early_stopper = EarlyStopping(patience=self.patience, verbose=False, name="sup_loss")
     #
     #
     #
+    # def create_slot_classifiers(self, sample_label):
     #
     #     self.slot_fcs = []
     #     self.slot_fc_params = []
