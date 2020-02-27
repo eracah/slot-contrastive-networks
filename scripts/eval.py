@@ -57,7 +57,6 @@ if __name__ == "__main__":
 
     train_parser = get_train_argparser()
     train_args = run.config
-
     for k, v in train_args.items():
         if k in args:
             args.__dict__["train_" + k] = v

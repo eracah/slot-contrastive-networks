@@ -167,7 +167,7 @@ if __name__ == "__main__":
         encoder = get_encoder(args, sample_frame=sample_frame)
         model = SupervisedModel(args, encoder, label_keys=label_keys,  device=device, regression=args.regression, wandb=wandb, num_state_variables=num_state_variables).to(device)
     else:
-        encoder = get_encoder(args, args.num_slots, sample_frame)
+        encoder = get_encoder(args, sample_frame)
         tr_loader, val_loader = dataloaders
 
         if args.method == "cswm":

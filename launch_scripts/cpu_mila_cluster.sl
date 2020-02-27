@@ -3,7 +3,7 @@
 
 #SBATCH --mem=64G
 #SBATCH -c 4
-#SBATCH -x rtx6
+#SBATCH -x bart13,bart14,eos20,eos21
 #SBATCH --time=48:00:00
 #SBATCH -o /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out  # Write the log on tmp1
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
