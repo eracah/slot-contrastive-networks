@@ -4,11 +4,10 @@ import torch
 from src.utils import calculate_accuracy
 
 class STDIMModel(nn.Module):
-    def __init__(self, encoder, embedding_dim, config, device=torch.device('cpu'), wandb=None):
+    def __init__(self, encoder, embedding_dim, device=torch.device('cpu'), wandb=None):
         super().__init__()
         self.encoder = encoder
         self.fmap_encoder = encoder.fmap_encoder
-        self.config = config
         self.emnedding_dim = embedding_dim
         self.wandb = wandb
 
