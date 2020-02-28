@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument('--num-episodes', type=int, default=100)
     parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"],default="random_agent", help="how we collect the data")
     parser.add_argument('--num-processes', type=int, default=8,help='Number of parallel environments to collect samples from (default: 8)')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
+    parser.add_argument('--seed', type=int, default=11, help='Random seed to use')
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning Rate for learning representations (default: 5e-4)')
     parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
@@ -107,10 +107,10 @@ if __name__ == "__main__":
 
 
     trainer.train(tr_dl, val_dl)
-    test_acc, test_f1score = trainer.test(test_dl)
+    val_acc, val_f1score = trainer.test(val_dl) # don't use test yet!
     weights = trainer.get_weights()
     np.save(wandb.run.dir + "/probe_weights.npy", weights)
-    test_f1_dict = dict(zip(label_keys, test_f1score))
+    test_f1_dict = dict(zip(label_keys, val_f1score))
     postprocess_and_log_metrics(test_f1_dict, prefix="concat_",
                                 suffix="_f1")
 

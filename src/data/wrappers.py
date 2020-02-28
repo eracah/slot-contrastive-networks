@@ -9,7 +9,7 @@ cv2.ocl.setUseOpenCL(False)
 from gym.wrappers import TimeLimit
 
 
-def wrap_atari_env(env, args):
+def wrap_atari_env(env, args, rng):
     """make gym env and wrap it"""
     if args.crop != [-1,-1]:
         env = CropHeight(env, args.crop)
@@ -17,7 +17,7 @@ def wrap_atari_env(env, args):
     if args.grayscale:
         env = GrayscaleWrapper(env)
     if args.noop_max > 0:
-        env = NoopResetEnv(env, noop_max=args.noop_max)
+        env = NoopResetEnv(env, rng, noop_max=args.noop_max)
     if 'FIRE' in env.unwrapped.get_action_meanings():
         env = FireResetEnv(env)
 
@@ -86,7 +86,7 @@ class GrayscaleWrapper(gym.ObservationWrapper):
         return frame
 
 class NoopResetEnv(gym.Wrapper):
-    def __init__(self, env, noop_max=30):
+    def __init__(self, env, rng, noop_max=30):
         """Sample initial states by taking random number of no-ops on reset.
         No-op is assumed to be action 0.
         """
@@ -94,6 +94,7 @@ class NoopResetEnv(gym.Wrapper):
         self.noop_max = noop_max
         self.override_num_noops = None
         self.noop_action = 0
+        self.rng = rng
         assert env.unwrapped.get_action_meanings()[0] == 'NOOP'
 
     def reset(self, **kwargs):
@@ -102,7 +103,7 @@ class NoopResetEnv(gym.Wrapper):
         if self.override_num_noops is not None:
             noops = self.override_num_noops
         else:
-            noops = self.unwrapped.np_random.randint(1, self.noop_max + 1) #pylint: disable=E1101
+            noops = self.rng.randint(1, self.noop_max + 1) #pylint: disable=E1101
         assert noops > 0
         obs = None
         for _ in range(noops):

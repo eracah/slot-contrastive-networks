@@ -17,10 +17,11 @@ import numpy as np
 
 def get_transitions(args, seed=42, keep_as_episodes=True, min_episode_length=8, max_frames=None, max_episodes=None):
     """workhorse function: collect frames, actions, and labels and split into episodes"""
+    rng = np.random.RandomState(seed)
     frames, labels, actions = [], [], []
     env = gym.make(args.env_name)
     env.seed(seed)
-    env = wrap_atari_env(env, args)
+    env = wrap_atari_env(env, args, rng)
     env = AtariARIWrapper(env)
     stop_collecting = False
     frame_count = 0
@@ -33,7 +34,7 @@ def get_transitions(args, seed=42, keep_as_episodes=True, min_episode_length=8, 
         ep_labels = appendabledict()
         ep_actions = []
         while not done:
-            action = env.action_space.sample()
+            action = rng.randint(env.action_space.n)
             obs, reward, done, info = env.step(action)
             label = info["labels"]
             ep_frames.append(torch.tensor(obs))
@@ -52,6 +53,7 @@ def get_transitions(args, seed=42, keep_as_episodes=True, min_episode_length=8, 
     if not keep_as_episodes:
         frames = torch.cat(frames)
         labels = flatten_labels(labels)
+        actions = torch.cat(actions)
 
     env.close()
 

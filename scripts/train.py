@@ -22,7 +22,7 @@ def get_argparser():
     parser.add_argument('--num-frames', type=int, default=100000,  help='Number of steps to pretrain representations (default: 100000)')
     parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
     parser.add_argument('--num-processes', type=int, default=8, help='Number of parallel environments to collect samples from (default: 8)')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
+    parser.add_argument('--seed', type=int, default=0, help='Random seed to use')
     parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4', help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
     parser.add_argument('--num-frame-stack', type=int, default=1, help='Number of frames to stack for a state')
     parser.add_argument("--screen-size", nargs=2, type=int, default=(210, 160))

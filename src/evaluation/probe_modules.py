@@ -145,6 +145,7 @@ class ProbeTrainer(object):
             es = []
             self.probe.train()
             epoch_loss, accuracies, _ = self.do_one_epoch(tr_dl)
+
             self.probe.eval()
             val_loss, val_accuracies, _ = self.do_one_epoch(val_dl)
             val_accuracies = np.asarray(val_accuracies).reshape(self.num_state_variables, self.num_slots)
