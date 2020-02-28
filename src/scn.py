@@ -3,17 +3,16 @@ import torch.nn as nn
 from src.utils import calculate_accuracy
 
 class SCNModel(nn.Module):
-    def __init__(self, args, encoder, device=torch.device('cpu'), wandb=None, ablation="none"):
+    def __init__(self, args, encoder, device=torch.device('cpu'), wandb=None, ablations=[]):
         super().__init__()
         self.encoder = encoder
         self.args = args
         self.wandb = wandb
         self.num_slots = self.args.num_slots
         self.embedding_dim = self.args.embedding_dim
-        self.ablation = ablation
+        self.ablations = ablations
         self.score_matrix_1 = nn.Linear(self.embedding_dim, self.embedding_dim)
-        if self.ablation != "hybrid":
-            self.score_matrix_2 = nn.Linear(self.embedding_dim, self.embedding_dim)
+        self.score_matrix_2 = nn.Linear(self.embedding_dim, self.embedding_dim)
         self.device = device
 
     def calc_loss1(self, slots_t, slots_pos):
@@ -64,7 +63,10 @@ class SCNModel(nn.Module):
     def calc_loss(self, xt, a, xtp1):
         slots_t, slots_pos = self.encoder(xt), self.encoder(xtp1)
         loss1 = self.calc_loss1(slots_t, slots_pos)
-        loss2 = self.calc_loss2(slots_t, slots_pos)
-        loss = loss1 + loss2
+        if "loss1-only" in self.ablations:
+            loss = loss1
+        else:
+            loss2 = self.calc_loss2(slots_t, slots_pos)
+            loss = loss1 + loss2
         return loss
 

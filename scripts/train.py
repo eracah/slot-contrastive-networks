@@ -12,7 +12,7 @@ import logging
 import gym
 import os
 # methods that need encoder trained before
-ablations = ["nce", "hybrid", "loss1-only", "loss2-only", "none"]
+ablations = ["hybrid", "loss1-only", "loss2-only", "dot-product", "no-fc", "iterative-slotwise"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 
 
@@ -34,7 +34,7 @@ def get_argparser():
     parser.add_argument("--checkpoint-index", type=int, default=-1)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument('--method', type=str, default='scn', choices= baselines + ["scn"], help='Method to use for training representations (default: scn')
-    parser.add_argument('--ablation', type=str, default="none", choices=ablations, help='Ablation of scn (default: scn')
+    parser.add_argument('--ablations', nargs="+", type=str, default=[], choices=ablations, help='Ablation of scn (default: scn')
     parser.add_argument('--embedding-dim', type=int, default=256, help='Dimensionality of embedding.')
     parser.add_argument("--num-slots", type=int, default=8)
     parser.add_argument("--patience", type=int, default=15)
@@ -119,7 +119,7 @@ def get_encoder(args, sample_frame):
         width_height = np.asarray(sample_frame.shape[2:])
         obj_extractor = EncoderCNNMedium(input_dim=input_channels,
                                         hidden_dim=args.hidden_dim // 16,
-                                        num_objects=num_slots)
+                                        num_objects=args.num_slots)
         slot_mlp = EncoderMLP(input_dim=np.prod(width_height // 5),
                                   output_dim=args.embedding_dim,
                                   hidden_dim=args.hidden_dim,
@@ -188,13 +188,13 @@ if __name__ == "__main__":
 
         elif args.method == "scn":
             from src.scn import SCNModel
-            model = SCNModel(args, encoder,  device=device, wandb=wandb, ablation=args.ablation).to(device)
+            model = SCNModel(args, encoder,  device=device, wandb=wandb, ablations=args.ablations).to(device)
             if args.regime == "cswm":
                 model.apply(cswm_utils.weights_init)
 
         elif args.method == "stdim":
             from src.baselines.stdim import STDIMModel
-            model = STDIMModel(encoder, args.embedding_dim, config, device, wandb).to(device)
+            model = STDIMModel(encoder, args.embedding_dim, device, wandb).to(device)
         else:
             assert False
 
