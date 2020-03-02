@@ -15,7 +15,7 @@ parser.add_argument('--epochs',type=int, default= 600)
 parser.add_argument('--batch-size', default=1024, type=int)
 parser.add_argument("--eval", action='store_true', default=False)
 parser.add_argument("--ids", type=str, nargs="+", default="None")
-args = parser.parse_args()
+args, other_args  = parser.parse_known_args()
 base_cmd = args.base_cmd
 if args.eval:
     if args.unkillable:
@@ -41,13 +41,13 @@ envs = ['asteroids',
 'boxing',
 'breakout',
 'demon_attack',
-'freeway',
+#'freeway',
 'frostbite',
 'hero',
 'montezuma_revenge',
-'ms_pacman',
+#'ms_pacman',
 'pitfall',
-'pong',
+#'pong',
 'private_eye',
 'qbert',
 'riverraid',
@@ -58,7 +58,7 @@ envs = ['asteroids',
 'video_pinball',
 'yars_revenge']
 
-#envs = ['pong', 'space_invaders', 'ms_pacman']
+envs = ['pong', 'freeway', 'boxing', 'ms_pacman']
 if args.envs != "None":
     envs = args.envs
 
@@ -110,6 +110,7 @@ else:
 
 
         sargs.extend(["--method", args.method])
+        sargs.extend(other_args)
 
         print(" ".join(sargs))
         subprocess.run(sargs)

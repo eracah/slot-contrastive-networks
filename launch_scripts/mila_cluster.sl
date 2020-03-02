@@ -6,8 +6,6 @@
 #SBATCH --time=16:00:00
 #SBATCH -o /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out  # Write the log on tmp1
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
-module load pytorch/1.4
-conda activate
 python -m scripts.train $@ --run-dir $SLURM_TMPDIR
 cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
 
