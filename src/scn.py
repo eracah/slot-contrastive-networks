@@ -24,10 +24,23 @@ class SCNModel(nn.Module):
         #        for each slot, for each example in the batch, dot prodcut with every other example in batch
         logits = torch.matmul(self.score_matrix_1(slots_t).transpose(1, 0),
                               slots_pos.permute(1, 2, 0))
+
         inp = logits.reshape(num_slots*batch_size, -1)
         target = torch.cat([torch.arange(batch_size) for i in range(num_slots)]).to(self.device)
-        loss1 = nn.CrossEntropyLoss()(inp, target)
+        if "hinge-loss" in self.ablations:
+            # positive dot-products are the diagonals
+            diagonals = torch.cat([logits[i].diag() for i in range(num_slots)])
+
+            # off-diagonals are negatives
+            mask = (1 - torch.eye(batch_size)).bool()
+            off_diagonals = logits[:, mask].reshape(num_slots, batch_size, batch_size - 1) # if you remove diagonals you have same matrix with one fewer element in each row
+            off_diagonals_max, _ = torch.max(off_diagonals, dim=2)
+            hinge_diff = self.args.hinge - (diagonals - off_diagonals_max.reshape(-1))
+            loss1 = torch.max(torch.zeros_like(hinge_diff), hinge_diff).mean()
+        else:
+            loss1 = nn.CrossEntropyLoss()(inp, target)
         acc1 = calculate_accuracy(inp.detach().cpu().numpy(), target.detach().cpu().numpy())
+
         if self.training:
             self.wandb.log({"tr_acc1": acc1})
             self.wandb.log({"tr_loss1": loss1.item()})

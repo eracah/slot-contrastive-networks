@@ -12,7 +12,7 @@ import logging
 import gym
 import os
 # methods that need encoder trained before
-ablations = ["hybrid", "loss1-only", "loss2-only", "dot-product", "no-fc", "iterative-slotwise"]
+ablations = ["hybrid", "loss1-only", "loss2-only", "dot-product", "no-fc", "iterative-slotwise", "hinge-loss"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 
 
