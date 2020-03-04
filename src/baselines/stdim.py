@@ -12,13 +12,13 @@ class STDIMModel(nn.Module):
         self.wandb = wandb
         self.args = args
 
-        self.score_fxn1 = nn.Linear(self.embedding_dim, self.fmap_encoder.local_layer_depth).to(device)  # x1 = global, x2=patch, n_channels = 32
-        self.score_fxn2 = nn.Linear(self.fmap_encoder.local_layer_depth, self.fmap_encoder.local_layer_depth).to(device)
+        self.score_fxn1 = nn.Linear(self.embedding_dim, self.fmap_encoder.local_layer_depth) # x1 = global, x2=patch, n_channels = 32
+        self.score_fxn2 = nn.Linear(self.fmap_encoder.local_layer_depth, self.fmap_encoder.local_layer_depth)
         if "structure-loss" in self.args.ablations:
             num_slots = self.args.num_slots
             assert self.embedding_dim % num_slots == 0, "Embedding dim (%i) must be divisible by num_slots (%i)!!!"%(self.embedding_dim, num_slots)
             slot_len = self.embedding_dim // num_slots
-            self.score_fxn_3 = nn.Linear(slot_len,slot_len)
+            self.score_fxn_3 = nn.Linear(slot_len, slot_len)
         self.device = device
 
     def calc_loss(self, xt, a, xtp1):
