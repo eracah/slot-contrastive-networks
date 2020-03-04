@@ -10,8 +10,18 @@ def init(module, weight_init, bias_init, gain=1):
     return module
 
 class Flatten(nn.Module):
+    def __init__(self):
+        super().__init__()
     def forward(self, x):
         return x.view(x.size(0), -1)
+
+
+class SlotFlatten(nn.Module):
+    def __init__(self):
+        super().__init__()
+    def forward(self, x):
+        return x.view(x.size(0), x.size(1), -1)
+
 
 class ConcatenateSlots(nn.Module):
     def __init__(self, encoder):
