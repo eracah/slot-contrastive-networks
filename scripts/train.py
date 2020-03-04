@@ -2,7 +2,7 @@ import argparse
 import os
 import torch
 import wandb
-from src.encoders import EncoderCNNMedium, NaureCNNObjExtractor, NatureCNN, EncoderMLP
+from src.encoders import EncoderCNNMedium, NaureCNNObjExtractor, NatureCNN, EncoderMLP, SlotFlatten
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 import numpy as np
@@ -12,7 +12,7 @@ import logging
 import gym
 import os
 # methods that need encoder trained before
-ablations = ["hybrid", "loss1-only", "loss2-only", "dot-product", "no-fc", "iterative-slotwise", "hinge-loss"]
+ablations = ["hybrid", "loss1-only", "loss2-only", "dot-product", "no-fc", "iterative-slotwise", "hinge-loss","structure-loss"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 
 
@@ -110,11 +110,14 @@ def get_encoder(args, sample_frame):
             encoder = NatureCNN(input_channels, args.embedding_dim)
         else:
             obj_extractor = NaureCNNObjExtractor(input_channels, args.num_slots)
-            slot_mlp = EncoderMLP(input_dim=np.prod(obj_extractor.final_fmap_shape),
+            slot_network = EncoderMLP(input_dim=np.prod(obj_extractor.final_fmap_shape),
                                   output_dim=args.embedding_dim,
                                   hidden_dim=args.hidden_dim,
                                   num_objects=args.num_slots)
-            encoder = nn.Sequential(obj_extractor, slot_mlp)
+            if "no-fc" in args.ablations:
+                slot_network = SlotFlatten()
+
+            encoder = nn.Sequential(obj_extractor, slot_network)
     elif args.regime == "cswm":
         width_height = np.asarray(sample_frame.shape[2:])
         obj_extractor = EncoderCNNMedium(input_dim=input_channels,
@@ -194,7 +197,7 @@ if __name__ == "__main__":
 
         elif args.method == "stdim":
             from src.baselines.stdim import STDIMModel
-            model = STDIMModel(encoder, args.embedding_dim, device, wandb).to(device)
+            model = STDIMModel(encoder, args, args.embedding_dim, device, wandb).to(device)
         else:
             assert False
 
