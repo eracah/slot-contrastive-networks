@@ -65,7 +65,7 @@ if args.envs != "None":
 if args.eval:
     assert args.ids != None, "specify the ids of the runs"
     for id in args.ids:
-        sargs = run_args + ["--wandb-tr-id", id]
+        sargs = run_args + ["--id", id]
         print(" ".join(sargs))
         subprocess.run(sargs)
 

@@ -8,5 +8,6 @@
 #SBATCH -e /network/tmp1/racaheva/coors/slurm_stdout/slurm-%j.out
 python -m scripts.train $@ --run-dir $SLURM_TMPDIR
 cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
+python -m scripts.eval --wandb-proj coors-production --run-dir $SLURM_TMPDIR --id `cat ./wandb_id.txt`
 
 
