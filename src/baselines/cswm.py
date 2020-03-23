@@ -4,7 +4,6 @@ import numpy as np
 
 import torch
 from torch import nn
-from src.encoders import EncoderCNNSmall, EncoderCNNMedium, EncoderCNNLarge, EncoderMLP
 
 class ContrastiveSWM(nn.Module):
     """Main module for a Contrastively-trained Structured World Model (C-SWM).

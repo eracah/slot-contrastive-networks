@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import src.cswm_utils as utils
+import numpy as np
 
 def init(module, weight_init, bias_init, gain=1):
     weight_init(module.weight.data, gain=gain)
@@ -37,14 +38,13 @@ init_ = lambda m: init(m,
        lambda x: nn.init.constant_(x, 0),
        nn.init.calculate_gain('relu'))
 
-class NatureFMapEncoder(nn.Module):
-    def __init__(self, input_channels):
+
+class STDIMEncoder(nn.Module):
+    def __init__(self, input_channels, embedding_dim):
         super().__init__()
-
-        self.input_channels = input_channels
-
-        self.flatten = Flatten()
-
+        self.embedding_dim = embedding_dim
+        self.final_conv_size = 64 * 9 * 6
+        self.final_conv_shape = (64, 9, 6)
 
         self.encode_to_f5 = nn.Sequential(
             init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
@@ -54,26 +54,7 @@ class NatureFMapEncoder(nn.Module):
             init_(nn.Conv2d(64, 128, 4, stride=2)),
             nn.ReLU()
         )
-        self.train()
-
-
-    @property
-    def local_layer_depth(self):
-        return self.encode_to_f5[4].out_channels
-
-    def forward(self, inputs):
-        f5 = self.encode_to_f5(inputs)
-        return f5
-
-class NatureCNN(nn.Module):
-    def __init__(self, input_channels, embedding_dim):
-        super().__init__()
-        self.fmap_encoder = NatureFMapEncoder(input_channels)
-        self.embedding_dim = embedding_dim
-        self.final_conv_size = 64 * 9 * 6
-        self.final_conv_shape = (64, 9, 6)
-
-        self.conv_to_f7 = nn.Sequential(
+        self.f5_to_f7 = nn.Sequential(
             init_(nn.Conv2d(128, 64, 3, stride=1)),
             nn.ReLU()
         )
@@ -82,59 +63,54 @@ class NatureCNN(nn.Module):
             Flatten(),
             init_(nn.Linear(self.final_conv_size, self.embedding_dim))
         )
+
+
+    @property
+    def local_layer_depth(self):
+        return self.encode_to_f5[4].out_channels
+
+    def get_local_fmaps(self, x):
+        f5 = self.encode_to_f5(x)
+        return f5
+
     def forward(self, x):
-        fmaps = self.fmap_encoder(x)
-        global_vec = self.f7_to_global_vector(self.conv_to_f7(fmaps))
+        fmaps = self.encode_to_f5(x)
+        global_vec = self.f7_to_global_vector(self.f5_to_f7(fmaps))
         return global_vec
 
 
-class NatureObjFMapEncoder(nn.Module):
-    def __init__(self, num_slots):
+class SCNEncoder(nn.Module):
+    def __init__(self, input_dim, slot_len, num_slots):
         super().__init__()
+        self.base_encoder = STDIMEncoder(input_channels=input_dim, embedding_dim=slot_len)
         self.num_slots = num_slots
-        self.conv_to_f7 = nn.Sequential(
-            init_(nn.Conv2d(128, 64, 3, stride=1)),
-            nn.ReLU()
-        )
+        self.slot_len = slot_len
         self.slot_conv = nn.Sequential(
                             nn.Conv2d(64, num_slots, 1),
                             nn.ReLU()
         )
-
-    def forward(self, fmaps):
-        slot_fmaps = self.slot_conv(self.conv_to_f7(fmaps))
-        return slot_fmaps
-
-class NaureCNNObjExtractor(nn.Module):
-    def __init__(self, input_dim, num_slots):
-        super().__init__()
-        self.cnn = NatureFMapEncoder(input_dim)
-        self.fmap2objfmaps = NatureObjFMapEncoder(num_slots)
-        self.num_slots = num_slots
+        self.final_conv_size = 9 * 6
+        self.fmap_to_slot = nn.Sequential(SlotFlatten(),
+            init_(nn.Linear(self.final_conv_size, self.slot_len))
+        )
         self.final_fmap_shape = (9, 6)
 
-    def forward(self, input):
-        slot_fmaps = self.fmap2objfmaps(self.cnn(input))
-        return slot_fmaps
+    def forward(self, x):
+        f5 = self.base_encoder.get_local_fmaps(x)
+        f7 = self.base_encoder.f5_to_f7(f5)
+        slot_fmaps = self.slot_conv(f7)
+        slots = self.fmap_to_slot(slot_fmaps)
+        return slots
 
 
-class EncoderCNNSmall(nn.Module):
-    """CNN encoder, maps observation to obj-specific feature maps."""
+class CSWMEncoder(nn.Module):
+    def __init__(self,input_dim, width_height, output_dim, hidden_dim, num_objects, act_fn='relu'):
+        super().__init__()
+        self.base_cnn = EncoderCNNMedium(input_dim, hidden_dim // 16, num_objects)
+        self.mlp = EncoderMLP(np.prod(width_height // 5), output_dim, hidden_dim, num_objects, act_fn)
 
-    def __init__(self, input_dim, hidden_dim, num_objects, act_fn='sigmoid',
-                 act_fn_hid='relu'):
-        super(EncoderCNNSmall, self).__init__()
-        self.cnn1 = nn.Conv2d(
-            input_dim, hidden_dim, (10, 10), stride=10)
-        self.cnn2 = nn.Conv2d(hidden_dim, num_objects, (1, 1), stride=1)
-        self.ln1 = nn.BatchNorm2d(hidden_dim)
-        self.act1 = utils.get_act_fn(act_fn_hid)
-        self.act2 = utils.get_act_fn(act_fn)
-
-    def forward(self, obs):
-        h = self.act1(self.ln1(self.cnn1(obs)))
-        return self.act2(self.cnn2(h))
-
+    def forward(self, x):
+        return self.mlp(self.base_cnn(x))
 
 class EncoderCNNMedium(nn.Module):
     """CNN encoder, maps observation to obj-specific feature maps."""
@@ -156,36 +132,6 @@ class EncoderCNNMedium(nn.Module):
         h = self.act1(self.ln1(self.cnn1(obs)))
         h = self.act2(self.cnn2(h))
         return h
-
-
-class EncoderCNNLarge(nn.Module):
-    """CNN encoder, maps observation to obj-specific feature maps."""
-
-    def __init__(self, input_dim, hidden_dim, num_objects, act_fn='sigmoid',
-                 act_fn_hid='relu'):
-        super(EncoderCNNLarge, self).__init__()
-
-        self.cnn1 = nn.Conv2d(input_dim, hidden_dim, (3, 3), padding=1)
-        self.act1 = utils.get_act_fn(act_fn_hid)
-        self.ln1 = nn.BatchNorm2d(hidden_dim)
-
-        self.cnn2 = nn.Conv2d(hidden_dim, hidden_dim, (3, 3), padding=1)
-        self.act2 = utils.get_act_fn(act_fn_hid)
-        self.ln2 = nn.BatchNorm2d(hidden_dim)
-
-        self.cnn3 = nn.Conv2d(hidden_dim, hidden_dim, (3, 3), padding=1)
-        self.act3 = utils.get_act_fn(act_fn_hid)
-        self.ln3 = nn.BatchNorm2d(hidden_dim)
-
-        self.cnn4 = nn.Conv2d(hidden_dim, num_objects, (3, 3), padding=1)
-        self.act4 = utils.get_act_fn(act_fn)
-
-    def forward(self, obs):
-        h = self.act1(self.ln1(self.cnn1(obs)))
-        h = self.act2(self.ln2(self.cnn2(h)))
-        h = self.act3(self.ln3(self.cnn3(h)))
-        return self.act4(self.cnn4(h))
-
 
 class EncoderMLP(nn.Module):
     """MLP encoder, maps observation to latent state."""
@@ -213,14 +159,7 @@ class EncoderMLP(nn.Module):
         return self.fc3(h)
 
 
-class CSWMSlotEncoder(nn.Module):
-    def __init__(self, base_cnn, input_dim, output_dim, hidden_dim, num_objects, act_fn='relu' ):
-        super().__init__()
-        self.base_cnn = base_cnn
-        self.mlp = EncoderMLP(input_dim, output_dim, hidden_dim, num_objects, act_fn)
 
-    def forward(self, x):
-        self.mlp(self.base_cnn(x))
 
 
 

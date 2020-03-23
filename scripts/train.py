@@ -2,7 +2,7 @@ import argparse
 import os
 import torch
 import wandb
-from src.encoders import EncoderCNNMedium, NaureCNNObjExtractor, NatureCNN, EncoderMLP, SlotFlatten
+from src.encoders import STDIMEncoder, SCNEncoder, CSWMEncoder
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 import numpy as np
@@ -105,29 +105,20 @@ def do_epoch(loader, optimizer, model, epoch):
 
 def get_encoder(args, sample_frame):
     input_channels = sample_frame.shape[1]
+    width_height = np.asarray(sample_frame.shape[2:])
     if args.regime == "stdim":
         if args.method == "stdim":
-            encoder = NatureCNN(input_channels, args.embedding_dim)
+            encoder = STDIMEncoder(input_channels, args.embedding_dim)
         else:
-            obj_extractor = NaureCNNObjExtractor(input_channels, args.num_slots)
-            slot_network = EncoderMLP(input_dim=np.prod(obj_extractor.final_fmap_shape),
-                                  output_dim=args.embedding_dim,
-                                  hidden_dim=args.hidden_dim,
-                                  num_objects=args.num_slots)
-            if "no-fc" in args.ablations:
-                slot_network = SlotFlatten()
-
-            encoder = nn.Sequential(obj_extractor, slot_network)
+            encoder = SCNEncoder(input_channels,
+                                 slot_len=args.embedding_dim,
+                                 num_slots=args.num_slots)
     elif args.regime == "cswm":
-        width_height = np.asarray(sample_frame.shape[2:])
-        obj_extractor = EncoderCNNMedium(input_dim=input_channels,
-                                        hidden_dim=args.hidden_dim // 16,
-                                        num_objects=args.num_slots)
-        slot_mlp = EncoderMLP(input_dim=np.prod(width_height // 5),
-                                  output_dim=args.embedding_dim,
-                                  hidden_dim=args.hidden_dim,
-                                  num_objects=args.num_slots)
-        encoder = nn.Sequential(obj_extractor, slot_mlp)
+        encoder = CSWMEncoder(input_dim=input_channels,
+                              hidden_dim=args.hidden_dim // 16,
+                              num_objects=args.num_slots,
+                              output_dim=args.embedding_dim,
+                              width_height=width_height)
     else:
         assert False
     return encoder
@@ -139,6 +130,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["train"])
     wandb.config.update(vars(args))
+    with open("wandb_id.txt", "w") as f:
+        f.write(str(wandb.run.id))
     log_file = os.path.join(wandb.run.dir, 'log.txt')
     logging.basicConfig(level=logging.WARN, format='%(message)s')
     logger = logging.getLogger()

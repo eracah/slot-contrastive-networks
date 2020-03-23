@@ -7,13 +7,13 @@ class STDIMModel(nn.Module):
     def __init__(self, encoder, args, embedding_dim, device=torch.device('cpu'), wandb=None):
         super().__init__()
         self.encoder = encoder
-        self.fmap_encoder = encoder.fmap_encoder
+        self.fmap_encoder = encoder.encode_to_f5
         self.embedding_dim = embedding_dim
         self.wandb = wandb
         self.args = args
 
-        self.score_fxn1 = nn.Linear(self.embedding_dim, self.fmap_encoder.local_layer_depth) # x1 = global, x2=patch, n_channels = 32
-        self.score_fxn2 = nn.Linear(self.fmap_encoder.local_layer_depth, self.fmap_encoder.local_layer_depth)
+        self.score_fxn1 = nn.Linear(self.embedding_dim, self.encoder.local_layer_depth) # x1 = global, x2=patch, n_channels = 32
+        self.score_fxn2 = nn.Linear(self.encoder.local_layer_depth, self.encoder.local_layer_depth)
         if "structure-loss" in self.args.ablations:
             num_slots = self.args.num_slots
             assert self.embedding_dim % num_slots == 0, "Embedding dim (%i) must be divisible by num_slots (%i)!!!"%(self.embedding_dim, num_slots)
