@@ -1,25 +1,17 @@
 from src.utils import print_memory
-from atariari.benchmark.episodes import get_episodes
-from scipy.optimize import linear_sum_assignment as lsa
-import pandas as pd
-from src.evaluation.probe_modules import AttentionProbeTrainer
-from src.utils import log_metrics, postprocess_and_log_metrics
+from src.utils import postprocess_and_log_metrics
 from src.encoders import ConcatenateSlots
 import argparse
 import torch
 import wandb
-from src.evaluation.probe_modules import ProbeTrainer
-from pathlib import Path
+from src.evaluation.probe_modules import ProbeTrainer, LinearRegressionProbe
 import json
 import numpy as np
 from scripts.train import get_argparser as get_train_argparser
 from scripts.train import get_encoder
-import glob
-import os
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
-from matplotlib.ticker import MultipleLocator, IndexFormatter
-from matplotlib import pyplot as plt
+
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -36,7 +28,7 @@ if __name__ == "__main__":
     parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
     parser.add_argument('--epochs', type=int, default=300, help='Number of epochs for  (default: 100)')
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
-    parser.add_argument("--wandb-tr-id", type=str)
+    parser.add_argument("--id", type=str)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
     args = parser.parse_args()
@@ -47,7 +39,7 @@ if __name__ == "__main__":
     # latest_file = max(list_of_files, key=os.path.getctime)
     # args.train_run_dirname = Path(latest_file).name
     api = wandb.Api()
-    path = "/".join(["eracah", args.wandb_proj, args.wandb_tr_id])
+    path = "/".join(["eracah", args.wandb_proj, args.id])
     print(path)
     run = api.run(path=path)
     json_obj = run.file(name="wandb-metadata.json").download(root=wandb.run.dir + "/train_run", replace=True)
@@ -93,8 +85,9 @@ if __name__ == "__main__":
     #representation_len = args.embedding_dim
     num_slots = 1
 
+    regression_trainer = LinearRegressionProbe(encoder)
 
-    trainer = ProbeTrainer(encoder=encoder,
+    clsf_trainer = ProbeTrainer(encoder=encoder,
                            wandb=wandb,
                            epochs=args.epochs,
                            lr=args.lr,
@@ -106,13 +99,15 @@ if __name__ == "__main__":
                            representation_len=representation_len, l1_regularization=False)
 
 
-    trainer.train(tr_dl, val_dl)
-    val_acc, val_f1score = trainer.test(val_dl) # don't use test yet!
-    weights = trainer.get_weights()
-    np.save(wandb.run.dir + "/probe_weights.npy", weights)
-    test_f1_dict = dict(zip(label_keys, val_f1score))
-    postprocess_and_log_metrics(test_f1_dict, prefix="concat_",
-                                suffix="_f1")
+
+    for k,trainer in dict(r2=regression_trainer, f1=clsf_trainer).items():
+        trainer.train(tr_dl, val_dl)
+        val_score = trainer.test(val_dl) # don't use test yet!
+        weights = trainer.get_weights()
+        np.save(wandb.run.dir + "/" + k + "_probe_weights.npy", weights)
+        test_dict = dict(zip(label_keys, val_score))
+        postprocess_and_log_metrics(test_dict, prefix="concat_",
+                                    suffix="_"+ k)
 
 
 

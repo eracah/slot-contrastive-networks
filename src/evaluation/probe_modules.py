@@ -6,6 +6,8 @@ import pandas as pd
 from src.utils import calculate_f1_score
 import sys
 import numpy as np
+from sklearn.multioutput import MultiOutputRegressor
+from sklearn.linear_model import LinearRegression
 
 
 """Usage:
@@ -168,7 +170,7 @@ class ProbeTrainer(object):
     def test(self, test_dl):
         self.probe.eval()
         _, acc, f1 = self.do_one_epoch(test_dl)
-        return acc, f1
+        return f1
 
     def get_weights(self):
         return self.probe.weight.detach().cpu().numpy()
@@ -186,6 +188,39 @@ class ProbeTrainer(object):
             else:
                 sys.stderr.write("\t {}: {:8.4f}\n".format(k, v))
                 self.wandb.log({k: v})
+
+
+def get_feature_vectors(encoder, dataloader):
+    num_state_variables = dataloader.dataset.tensors[1].shape[-1]
+    vectors = []
+    labels = np.empty(shape=(0, num_state_variables))
+    for x,y in dataloader:
+        frames = x.float() / 255.
+        h = encoder(frames).detach().cpu().numpy()
+        vectors.append(h)
+        labels = np.concatenate((labels, y))
+    vectors = np.concatenate(vectors)
+    return vectors, labels
+
+class LinearRegressionProbe(object):
+    def __init__(self,
+                 encoder):
+        self.encoder = encoder
+        self.multi_lin_reg = MultiOutputRegressor(LinearRegression())
+
+
+    def get_weights(self):
+        return np.stack([estimator.coef_ for estimator in self.multi_lin_reg.estimators_])
+
+    def train(self, tr_dl, val_dl):
+        x, y = get_feature_vectors(self.encoder, tr_dl)
+        self.multi_lin_reg.fit(x,y)
+
+    def test(self, test_dl):
+        x, y = get_feature_vectors(self.encoder, test_dl)
+        r2_scores = [self.multi_lin_reg.estimators_[i].score(x,y[:,i]) for i in range(y.shape[-1])]
+        return r2_scores
+
 
 class LinearAttentionProbe(nn.Module):
     """Attention oover slots to linear classifier"""

@@ -16,74 +16,6 @@ from scipy.stats import entropy
 ablations = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 
-
-def get_argparser():
-    parser = argparse.ArgumentParser()
-
-    # train
-    parser.add_argument("--run-dir", type=str, default=".")
-    parser.add_argument("--final-dir", type=str, default=".")
-
-    parser.add_argument('--num-frames', type=int, default=100000, help='Number of steps to pretrain representations (default: 100000)')
-    parser.add_argument("--collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
-    parser.add_argument('--num-processes', type=int, default=8, help='Number of parallel environments to collect samples from (default: 8)')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
-
-
-    parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
-    parser.add_argument('--num-frame-stack', type=int, default=1, help='Number of frames to stack for a state')
-    parser.add_argument('--no-downsample', action='store_true', default=True, help='Whether to use a linear classifier')
-    parser.add_argument("--color", action='store_true', default=True)
-    parser.add_argument("--checkpoint-index", type=int, default=-1)
-    parser.add_argument("--entropy-threshold", type=float, default=0.6)
-
-
-    #eval
-    parser.add_argument('--probe-num-frames', type=int, default=50000, help='Number of steps to train probes (default: 30000 )')
-    parser.add_argument("--probe-collect-mode", type=str, choices=["random_agent", "pretrained_ppo", "cswm"], default="random_agent")
-    parser.add_argument('--num-processes', type=int, default=8, help='Number of parallel environments to collect samples from (default: 8)')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed to use')
-
-
-    parser.add_argument('--env-name', default='MontezumaRevengeNoFrameskip-v4',help='environment to train on (default: MontezumaRevengeNoFrameskip-v4)')
-    parser.add_argument('--num-frame-stack', type=int, default=1, help='Number of frames to stack for a state')
-    parser.add_argument('--no-downsample', action='store_true', default=True, help='Whether to use a linear classifier')
-    parser.add_argument("--color", action='store_true', default=True)
-    parser.add_argument("--checkpoint-index", type=int, default=-1)
-    parser.add_argument("--entropy-threshold", type=float, default=0.6)
-
-
-
-    parser.add_argument('--method', type=str, default='infonce', choices=ablations + baselines, help='Method to use for training representations (default: nce')
-    parser.add_argument("--end-with-relu", action='store_true', default=False)
-    parser.add_argument('--encoder-type', type=str, default="Nature", choices=["stdim", "cswm"], help='Encoder type stim or cswm')
-    parser.add_argument('--feature-size', type=int, default=256,help='Size of features')
-
-    parser.add_argument("--num_slots", type=int, default=8)
-    parser.add_argument("--slot-len", type=int, default=64)
-    parser.add_argument("--fmap-num", default="f7")
-
-
-
-
-
-
-    parser.add_argument("--patience", type=int, default=15)
-    parser.add_argument('--lr', type=float, default=3e-4, help='Learning Rate foe learning representations (default: 5e-4)')
-    parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
-    parser.add_argument('--epochs', type=int, default=100, help='Number of epochs for  (default: 100)')
-    parser.add_argument('--probe-lr', type=float, default=3e-4)
-
-
-
-
-
-    parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
-
-
-
-    return parser
-
 def get_channels(args):
     if args.color and args.num_frame_stack == 1:
         num_channels = 3
@@ -218,22 +150,22 @@ def append_suffix(dictionary, suffix):
 def compute_dict_average(metric_dict):
     return np.mean(list(metric_dict.values()))
 
-def save_model(model, envs, save_dir, model_name, use_cuda):
-    save_path = os.path.join(save_dir)
-    try:
-        os.makedirs(save_path)
-    except OSError:
-        pass
-
-    # A really ugly way to save a model to CPU
-    save_model = model
-    if use_cuda:
-        save_model = copy.deepcopy(model).cpu()
-
-    save_model = [save_model,
-                  getattr(get_vec_normalize(envs), 'ob_rms', None)]
-
-    torch.save(save_model, os.path.join(save_path, model_name + ".pt"))
+# def save_model(model, envs, save_dir, model_name, use_cuda):
+#     save_path = os.path.join(save_dir)
+#     try:
+#         os.makedirs(save_path)
+#     except OSError:
+#         pass
+#
+#     # A really ugly way to save a model to CPU
+#     save_model = model
+#     if use_cuda:
+#         save_model = copy.deepcopy(model).cpu()
+#
+#     save_model = [save_model,
+#                   getattr(get_vec_normalize(envs), 'ob_rms', None)]
+#
+#     torch.save(save_model, os.path.join(save_path, model_name + ".pt"))
 
 
 
