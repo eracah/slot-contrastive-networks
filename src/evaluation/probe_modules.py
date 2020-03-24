@@ -41,7 +41,7 @@ class ProbeTrainer(object):
                  per_probe_early_stop=True,
                  l1_regularization=False):
 
-        self.encoder = encoder
+        self.encoder = encoder.to(device)
         self.wandb = wandb
         self.l1_regularization = l1_regularization
         self.num_state_variables = num_state_variables
