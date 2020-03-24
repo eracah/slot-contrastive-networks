@@ -205,7 +205,7 @@ def get_feature_vectors(encoder, dataloader):
 class LinearRegressionProbe(object):
     def __init__(self,
                  encoder):
-        self.encoder = encoder
+        self.encoder = encoder.cpu()
         self.multi_lin_reg = MultiOutputRegressor(LinearRegression())
 
 
