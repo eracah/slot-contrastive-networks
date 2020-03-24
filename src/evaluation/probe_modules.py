@@ -205,7 +205,7 @@ def get_feature_vectors(encoder, dataloader):
 class LinearRegressionProbe(object):
     def __init__(self,
                  encoder):
-        self.encoder = encoder.cpu()
+        self.encoder = encoder
         self.multi_lin_reg = MultiOutputRegressor(LinearRegression())
 
 
@@ -213,11 +213,11 @@ class LinearRegressionProbe(object):
         return np.stack([estimator.coef_ for estimator in self.multi_lin_reg.estimators_])
 
     def train(self, tr_dl, val_dl):
-        x, y = get_feature_vectors(self.encoder, tr_dl)
+        x, y = get_feature_vectors(self.encoder.cpu(), tr_dl)
         self.multi_lin_reg.fit(x,y)
 
     def test(self, test_dl):
-        x, y = get_feature_vectors(self.encoder, test_dl)
+        x, y = get_feature_vectors(self.encoder.cpu(), test_dl)
         r2_scores = [self.multi_lin_reg.estimators_[i].score(x,y[:,i]) for i in range(y.shape[-1])]
         return r2_scores
 
