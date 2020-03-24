@@ -35,7 +35,7 @@ class STDIMModel(nn.Module):
         # then reshape to sy*sx, N, N then to sy*sx*N, N
         logits1 = torch.matmul(local_flattened, glob_score.t()).reshape(N, sy * sx, -1).transpose(1, 0).reshape(-1, N)
         # we now have sy*sx N x N matrices where the diagonals correspond to dot product between pairs consecutive in time at the same bagtch index
-        # aka the ocrrect answer. So the correct logit index is the diagonal sx*sy times
+        # aka the correct answer. So the correct logit index is the diagonal sx*sy times
         target1 = torch.arange(N).repeat(sx * sy).to(self.device)
         loss1 = nn.CrossEntropyLoss()(logits1, target1)
 
@@ -76,6 +76,9 @@ class STDIMModel(nn.Module):
             slots_tp1 = f_tp1.reshape(batch_size, num_slots, -1)
         except:
             assert False, "Embedding dim must be divisible by num_slots!!!"
+
+        if "normalize" in self.args.ablations:
+            slots_t = slots_t / slots_t.norm(p=2, dim=2, keepdim=True)
 
         batch_size, num_slots, slot_len = slots_t.shape
         # logits: batch_size x num_slots x num_slots
