@@ -141,6 +141,7 @@ class ProbeTrainer(object):
 
 
     def train(self, tr_dl, val_dl):
+        self.encoder.to(self.device)
         epoch = 0
 
         while epoch < self.epochs:
