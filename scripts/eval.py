@@ -62,7 +62,6 @@ if __name__ == "__main__":
     elif args.regime == "cswm":
         dataloaders = get_cswm_dataloader(args, mode="eval")
 
-    representation_len = args.embedding_dim if args.method == "stdim" else args.num_slots * args.embedding_dim
     tr_dl, val_dl, test_dl, label_keys = dataloaders
     wandb.run.summary.update(dict(label_keys=label_keys))
     sample_frame = next(tr_dl.__iter__())[0]
@@ -78,11 +77,9 @@ if __name__ == "__main__":
     f1s = []
     if args.method != "stdim":
         encoder = ConcatenateSlots(encoder)
-        representation_len = args.num_slots * args.embedding_dim
+        representation_len = args.num_slots * args.slot_len
     else:
-        representation_len = args.embedding_dim
-    #num_slots = args.num_slots
-    #representation_len = args.embedding_dim
+        representation_len = args.global_vector_len
     num_slots = 1
 
     regression_trainer = LinearRegressionProbe(encoder)

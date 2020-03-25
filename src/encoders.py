@@ -40,11 +40,13 @@ init_ = lambda m: init(m,
 
 
 class STDIMEncoder(nn.Module):
-    def __init__(self, input_channels, embedding_dim):
+    def __init__(self, input_channels, global_vector_len, ablations=[], num_slots=8):
         super().__init__()
-        self.embedding_dim = embedding_dim
+        self.global_vector_len = global_vector_len
         self.final_conv_size = 64 * 9 * 6
         self.final_conv_shape = (64, 9, 6)
+        self.ablations = ablations
+        self.num_slots = num_slots
 
         self.encode_to_f5 = nn.Sequential(
             init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
@@ -61,7 +63,7 @@ class STDIMEncoder(nn.Module):
 
         self.f7_to_global_vector = nn.Sequential(
             Flatten(),
-            init_(nn.Linear(self.final_conv_size, self.embedding_dim))
+            init_(nn.Linear(self.final_conv_size, self.global_vector_len))
         )
 
 
@@ -76,13 +78,22 @@ class STDIMEncoder(nn.Module):
     def forward(self, x):
         fmaps = self.encode_to_f5(x)
         global_vec = self.f7_to_global_vector(self.f5_to_f7(fmaps))
+        if "normalize" in self.ablations:
+            if "structure-loss" in self.ablations:
+                slots = global_vec.reshape(global_vec.shape[0], self.num_slots, -1)
+                slots = slots / slots.norm(p=2,dim=2, keepdim=True)
+                global_vec = slots.reshape(-1,self.global_vector_len)
+            else:
+                global_vec = global_vec / global_vec.norm(p=2, dim=1, keepdim=True)
+
+
         return global_vec
 
 
 class SCNEncoder(nn.Module):
     def __init__(self, input_dim, slot_len, num_slots):
         super().__init__()
-        self.base_encoder = STDIMEncoder(input_channels=input_dim, embedding_dim=slot_len)
+        self.base_encoder = STDIMEncoder(input_channels=input_dim, global_vector_len=slot_len)
         self.num_slots = num_slots
         self.slot_len = slot_len
         self.slot_conv = nn.Sequential(

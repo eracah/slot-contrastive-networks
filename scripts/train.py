@@ -36,7 +36,8 @@ def get_argparser():
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument('--method', type=str, default='scn', choices= baselines + ["scn"], help='Method to use for training representations (default: scn')
     parser.add_argument('--ablations', nargs="+", type=str, default=[], choices=ablations, help='Ablation of scn (default: scn')
-    parser.add_argument('--embedding-dim', type=int, default=256, help='Dimensionality of embedding.')
+    parser.add_argument('--global-vector-len', type=int, default=256, help='Dimensionality of embedding.')
+    parser.add_argument("--slot-len", type=int, default=32)
     parser.add_argument("--num-slots", type=int, default=8)
     parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
@@ -109,16 +110,19 @@ def get_encoder(args, sample_frame):
     width_height = np.asarray(sample_frame.shape[2:])
     if args.regime == "stdim":
         if args.method == "stdim":
-            encoder = STDIMEncoder(input_channels, args.embedding_dim)
+            encoder = STDIMEncoder(input_channels,
+                                   args.global_vector_len,
+                                   ablations=args.ablations,
+                                   num_slots=args.num_slots)
         else:
             encoder = SCNEncoder(input_channels,
-                                 slot_len=args.embedding_dim,
+                                 slot_len=args.slot_len,
                                  num_slots=args.num_slots)
     elif args.regime == "cswm":
         encoder = CSWMEncoder(input_dim=input_channels,
                               hidden_dim=args.hidden_dim // 16,
                               num_objects=args.num_slots,
-                              output_dim=args.embedding_dim,
+                              output_dim=args.slot_len,
                               width_height=width_height)
     else:
         assert False
@@ -172,7 +176,7 @@ if __name__ == "__main__":
             from src.baselines.cswm import ContrastiveSWM
             model = ContrastiveSWM(
                 encoder=encoder,
-                embedding_dim=args.embedding_dim,
+                embedding_dim=args.slot_len,
                 hidden_dim=args.hidden_dim,
                 action_dim=action_dim,
                 num_objects=args.num_slots,
@@ -191,7 +195,7 @@ if __name__ == "__main__":
 
         elif args.method == "stdim":
             from src.baselines.stdim import STDIMModel
-            model = STDIMModel(encoder, args, args.embedding_dim, device, wandb).to(device)
+            model = STDIMModel(encoder, args, args.global_vector_len, device, wandb).to(device)
         else:
             assert False
 
