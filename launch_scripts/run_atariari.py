@@ -82,13 +82,9 @@ else:
         sargs.extend(["--wandb-proj", "coors-production"])
         if args.regime == "stdim":
             sargs.extend(["--regime", "stdim", "--color",  "--lr",  "3e-4",  "--num-frames", "100000", "--batch-size", "128", "--epochs", "100"])
-            if args.method == "stdim":
-                sargs.extend(['--embedding-dim', '256'])
-            else:
-                sargs.extend(['--embedding-dim', '32', "--num-slots", "8"])
 
         elif args.regime == "cswm":
-            sargs.extend(['--regime', 'cswm', "--color", '--num-episodes', '1000', '--embedding-dim', '4', '--action-dim', '6', '--num-slots', '3',
+            sargs.extend(['--regime', 'cswm', "--color", '--num-episodes', '1000', '--slot-len', '4', '--action-dim', '6', '--num-slots', '3',
              '--copy-action',"--noop-max", "0", "--num-frame-stack", "2", "--screen-size", "50", "50", '--frameskip', '4',
                           '--hidden-dim', '512', "--max-episode-steps", "11"])
             if env in ["space_invaders", "pong"]:
