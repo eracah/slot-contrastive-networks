@@ -77,8 +77,6 @@ class STDIMModel(nn.Module):
         except:
             assert False, "Embedding dim must be divisible by num_slots!!!"
 
-        if "normalize" in self.args.ablations:
-            slots_t = slots_t / slots_t.norm(p=2, dim=2, keepdim=True)
 
         batch_size, num_slots, slot_len = slots_t.shape
         # logits: batch_size x num_slots x num_slots
