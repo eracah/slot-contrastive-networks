@@ -9,10 +9,10 @@ class SCNModel(nn.Module):
         self.args = args
         self.wandb = wandb
         self.num_slots = self.args.num_slots
-        self.embedding_dim = self.args.embedding_dim
+        self.slot_len = self.args.slot_len
         self.ablations = ablations
-        self.score_matrix_1 = nn.Linear(self.embedding_dim, self.embedding_dim)
-        self.score_matrix_2 = nn.Linear(self.embedding_dim, self.embedding_dim)
+        self.score_matrix_1 = nn.Linear(self.slot_len, self.slot_len)
+        self.score_matrix_2 = nn.Linear(self.slot_len, self.slot_len)
         self.device = device
 
     def calc_loss1(self, slots_t, slots_pos):
