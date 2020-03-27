@@ -11,7 +11,7 @@ from scripts.train import get_argparser as get_train_argparser
 from scripts.train import get_encoder
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
-
+import copy
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -101,35 +101,13 @@ if __name__ == "__main__":
         trainer.train(tr_dl, val_dl)
         val_score = trainer.test(val_dl) # don't use test yet!
         weights = trainer.get_weights()
+        if k == "r2":
+            reg_weights = copy.deepcopy(weights)
         np.save(wandb.run.dir + "/" + k + "_probe_weights.npy", weights)
         test_dict = dict(zip(label_keys, val_score))
         postprocess_and_log_metrics(test_dict, prefix="concat_",
                                     suffix="_"+ k)
 
-
-
-
-    # else:
-    #     acc_array = np.asarray(test_acc).reshape(num_state_variables, num_slots).transpose(1, 0)
-    #     f1_array = np.asarray(test_f1score).reshape(num_state_variables, num_slots).transpose(1, 0)
-    #     f1s = [dict(zip(label_keys, f1)) for f1 in f1_array]
-    #
-    #     slotwise_expl_df = pd.DataFrame(f1s)
-    #     slotwise_expl_dict = {col: slotwise_expl_df.values[:, i] for i, col in enumerate(slotwise_expl_df.columns)}
-    #     log_metrics(slotwise_expl_dict, prefix="slotwise_", suffix="_f1")
-    #
-    #     best_slot_expl = dict(slotwise_expl_df.max())
-    #     postprocess_and_log_metrics(best_slot_expl, prefix="best_slot_",
-    #                                 suffix="_f1")
-    #
-    #
-    #     f1_np = slotwise_expl_df.to_numpy()
-    #     row_ind, col_ind = lsa(-f1_np)
-    #     inds = list(zip(row_ind, col_ind))
-    #     matched_slot_expl = {slotwise_expl_df.columns[factor_num]: f1_np[slot_num, factor_num] for
-    #                          (slot_num, factor_num) in inds}
-    #     postprocess_and_log_metrics(matched_slot_expl, prefix="matched_slot_",
-    #                                 suffix="_f1")
 
 
 
