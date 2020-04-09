@@ -48,36 +48,42 @@ class STDIMEncoder(nn.Module):
         self.ablations = ablations
         self.num_slots = num_slots
 
-        self.encode_to_f5 = nn.Sequential(
-            init_(nn.Conv2d(input_channels, 32, 8, stride=4)),
-            nn.ReLU(),
-            init_(nn.Conv2d(32, 64, 4, stride=2)),
-            nn.ReLU(),
-            init_(nn.Conv2d(64, 128, 4, stride=2)),
-            nn.ReLU()
-        )
-        self.f5_to_f7 = nn.Sequential(
-            init_(nn.Conv2d(128, 64, 3, stride=1)),
-            nn.ReLU()
-        )
 
-        self.f7_to_global_vector = nn.Sequential(
+        self.layers = nn.Sequential(
+            init_(nn.Conv2d(input_channels, 32, 8, stride=4)), # f1
+            nn.ReLU(),
+            init_(nn.Conv2d(32, 64, 4, stride=2)), # f3
+            nn.ReLU(),
+            init_(nn.Conv2d(64, 128, 4, stride=2)), # f5
+            nn.ReLU(),
+            init_(nn.Conv2d(128, 64, 3, stride=1)), #f7
+            nn.ReLU(),
             Flatten(),
-            init_(nn.Linear(self.final_conv_size, self.global_vector_len))
+            init_(nn.Linear(self.final_conv_size, self.global_vector_len)
+                  )
         )
-
 
     @property
-    def local_layer_depth(self):
-        return self.encode_to_f5[4].out_channels
+    def local_vector_len(self):
+        return self.layers[4].out_channels
 
-    def get_local_fmaps(self, x):
-        f5 = self.encode_to_f5(x)
-        return f5
+    def get_f5(self, x):
+        return self.layers[:5](x)
+
+    def get_f7(self, x):
+        return self.layers[:7](x)
+
+    def f5_to_f7(self, f5):
+        return self.layers[5:7](f5)
+
+    def f5_to_global_vec(self, f5):
+        return self.layers[5:](f5)
+
+    def f7_to_global_vec(self, f7):
+        return self.layers[7:](f7)
 
     def forward(self, x):
-        fmaps = self.encode_to_f5(x)
-        global_vec = self.f7_to_global_vector(self.f5_to_f7(fmaps))
+        global_vec = self.layers(x)
         if "normalize" in self.ablations:
             if "structure-loss" in self.ablations:
                 slots = global_vec.reshape(global_vec.shape[0], self.num_slots, -1)
@@ -86,8 +92,50 @@ class STDIMEncoder(nn.Module):
             else:
                 global_vec = global_vec / global_vec.norm(p=2, dim=1, keepdim=True)
 
-
         return global_vec
+
+
+
+class SlotSTDIMEncoder(STDIMEncoder):
+    def __init__(self, input_channels, global_vector_len, ablations=[], num_slots=8, slot_len=32):
+        super().__init__(input_channels, global_vector_len, ablations, num_slots)
+        self.slot_len = slot_len
+        self.feat_maps_per_slot_map = super().local_vector_len // num_slots
+        self.final_conv_shape = [ self.feat_maps_per_slot_map // 2, *self.final_conv_shape[1:]]
+        self.final_conv_size = np.prod(self.final_conv_shape)
+
+        self.slot_layers = nn.Sequential(
+            nn.Conv2d(self.feat_maps_per_slot_map, self.feat_maps_per_slot_map // 2, 3, stride=1),
+            nn.ReLU(),
+            Flatten(),
+            init_(nn.Linear(self.final_conv_size, self.slot_len)
+                  )
+        )
+
+    def get_slot_maps(self, x):
+        f5 = super().get_f5(x)
+        bs, ch, h, w = f5.shape
+        slot_maps = f5.reshape(bs, self.num_slots, -1, h, w)
+        return slot_maps
+
+    def forward(self, x):
+        slot_maps = self.get_slot_maps(x)
+        slots = self.slot_maps_to_slots(slot_maps)
+        return slots
+
+    def slot_maps_to_slots(self, slot_maps):
+        bs, num_slots, feat_maps_per_slot_map, h, w = slot_maps.shape
+
+        # we resize so that the batch is essentially all slot maps for all examples in the batch
+        # this helps us broadcast the next layers
+        slot_map_4d = slot_maps.reshape(bs*num_slots, self.feat_maps_per_slot_map, h, w)
+
+        # for each slot_map apply same conv layer + flatten + fc
+        all_slots = self.slot_layers(slot_map_4d)
+
+        # now we have number of examples by number of slots by slot_len
+        slots = all_slots.reshape(bs, num_slots, -1)
+        return slots
 
 
 class SCNEncoder(nn.Module):

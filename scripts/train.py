@@ -2,7 +2,7 @@ import argparse
 import os
 import torch
 import wandb
-from src.encoders import STDIMEncoder, SCNEncoder, CSWMEncoder
+from src.encoders import STDIMEncoder, SCNEncoder, CSWMEncoder, SlotSTDIMEncoder
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 import numpy as np
@@ -15,6 +15,7 @@ import os
 ablations = ["hybrid", "loss1-only", "loss2-only",
              "iterative-slotwise", "hinge-loss","structure-loss", "normalize" ]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
+methods = ["scn", "slot-stdim"]
 
 
 def get_argparser():
@@ -34,7 +35,7 @@ def get_argparser():
     color_group.add_argument("--color", action="store_false", dest="grayscale")
     parser.add_argument("--checkpoint-index", type=int, default=-1)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
-    parser.add_argument('--method', type=str, default='scn', choices= baselines + ["scn"], help='Method to use for training representations (default: scn')
+    parser.add_argument('--method', type=str, default='scn', choices= baselines + methods, help='Method to use for training representations (default: scn')
     parser.add_argument('--ablations', nargs="+", type=str, default=[], choices=ablations, help='Ablation of scn (default: scn')
     parser.add_argument('--global-vector-len', type=int, default=256, help='Dimensionality of embedding.')
     parser.add_argument("--slot-len", type=int, default=32)
@@ -106,14 +107,22 @@ def do_epoch(loader, optimizer, model, epoch):
 
 
 def get_encoder(args, sample_frame):
+    global_vector_len = args.global_vector_len if "global_vector_len" in args else args.embedding_dim
     input_channels = sample_frame.shape[1]
     width_height = np.asarray(sample_frame.shape[2:])
     if args.regime == "stdim":
         if args.method == "stdim":
             encoder = STDIMEncoder(input_channels,
-                                   args.global_vector_len,
+                                   global_vector_len,
                                    ablations=args.ablations,
                                    num_slots=args.num_slots)
+        elif args.method == "slot-stdim":
+            encoder = SlotSTDIMEncoder(input_channels,
+                                   global_vector_len,
+                                   ablations=args.ablations,
+                                   num_slots=args.num_slots,
+                                   slot_len=args.slot_len)
+
         else:
             encoder = SCNEncoder(input_channels,
                                  slot_len=args.slot_len,
@@ -194,8 +203,16 @@ if __name__ == "__main__":
                 model.apply(cswm_utils.weights_init)
 
         elif args.method == "stdim":
-            from src.baselines.stdim import STDIMModel
-            model = STDIMModel(encoder, args, args.global_vector_len, device, wandb).to(device)
+            from src.baselines.stdim import STDIMModel, STDIMStructureLossModel
+            if "structure-loss" in args.ablations:
+                model = STDIMStructureLossModel(encoder, args, args.global_vector_len, device, wandb).to(device)
+            else:
+                model = STDIMModel(encoder, args, args.global_vector_len, device, wandb).to(device)
+
+        elif args.method == "slot-stdim":
+            from src.baselines.stdim import SlotSTDIMModel
+            model = SlotSTDIMModel(encoder, args, args.global_vector_len, device, wandb)
+
         else:
             assert False
 
