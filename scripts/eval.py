@@ -82,31 +82,22 @@ if __name__ == "__main__":
         representation_len = args.global_vector_len
     num_slots = 1
 
-    regression_trainer = LinearRegressionProbe(encoder)
-
-    clsf_trainer = ProbeTrainer(encoder=encoder,
-                           wandb=wandb,
-                           epochs=args.epochs,
-                           lr=args.lr,
-                           patience=args.patience,
-                           batch_size=args.batch_size,
-                           num_state_variables=len(label_keys),
-                           fully_supervised=False,
-                           num_slots=num_slots,
-                           representation_len=representation_len, l1_regularization=False)
+    trainer = LinearRegressionProbe(encoder)
 
 
+    k = "r2"
+    trainer.train(tr_dl, val_dl)
+    val_score = trainer.test(val_dl) # don't use test yet!
+    weights = copy.deepcopy(trainer.get_weights())
+    np.save(wandb.run.dir + "/" + k + "_probe_weights.npy", weights)
+    test_dict = dict(zip(label_keys, val_score))
+    postprocess_and_log_metrics(test_dict, prefix="concat_",
+                                suffix="_"+ k)
 
-    for k,trainer in dict(r2=regression_trainer, f1=clsf_trainer).items():
-        trainer.train(tr_dl, val_dl)
-        val_score = trainer.test(val_dl) # don't use test yet!
-        weights = trainer.get_weights()
-        if k == "r2":
-            reg_weights = copy.deepcopy(weights)
-        np.save(wandb.run.dir + "/" + k + "_probe_weights.npy", weights)
-        test_dict = dict(zip(label_keys, val_score))
-        postprocess_and_log_metrics(test_dict, prefix="concat_",
-                                    suffix="_"+ k)
+
+
+
+
 
 
 
