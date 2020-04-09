@@ -211,7 +211,7 @@ if __name__ == "__main__":
 
         elif args.method == "slot-stdim":
             from src.baselines.stdim import SlotSTDIMModel
-            model = SlotSTDIMModel(encoder, args, args.global_vector_len, device, wandb)
+            model = SlotSTDIMModel(encoder, args, args.global_vector_len, device, wandb).to(device)
 
         else:
             assert False
