@@ -56,17 +56,16 @@ class STDIMModel(nn.Module):
         loss2, acc2 = self.calc_local_to_local(fmap_t, fmap_tp1)
 
         loss = loss1 + loss2
-        if self.training:
-            self.wandb.log({"tr_acc1": acc1})
-            self.wandb.log({"tr_acc2": acc2})
-            self.wandb.log({"tr_loss1": loss1.item()})
-            self.wandb.log({"tr_loss2": loss2.item()})
-        else:
-            self.wandb.log({"val_acc1": acc1})
-            self.wandb.log({"val_acc2": acc2})
-            self.wandb.log({"val_loss1": loss1.item()})
-            self.wandb.log({"val_loss2": loss2.item()})
+
+        for k,v in dict(loss1=loss1, loss2=loss2, acc1=acc1, acc2=acc2, loss=loss).items():
+            self.log(k,v)
         return loss
+
+    def log(self, name, scalar):
+        if self.training:
+            self.wandb.log({"tr_"+ name: scalar})
+        else:
+            self.wandb.log({"val_"+ name: scalar})
 
 
 class SlotSTDIMModel(STDIMModel):
@@ -87,6 +86,9 @@ class SlotSTDIMModel(STDIMModel):
         loss_ll,acc_ll = self.slot_local_to_local(sm_t, sm_tp1)
 
         loss = loss_gl + loss_ll
+
+        for k,v in dict(loss1=loss_gl, loss2=loss_ll, acc1=acc_gl, acc2=acc_ll, loss=loss).items():
+            super().log(k, v)
 
         return loss
 
@@ -177,7 +179,7 @@ class SlotSTDIMModel(STDIMModel):
         # the the correct class to classification problem number 0 is 0, to problem number 1 answer is 1,
         # problem number N-1 is N-1
         # so the overall target is just torch.range(N) repeated num_slots * h * w times
-        target = torch.arange(N).repeat(num_slots * h * w)
+        target = torch.arange(N).repeat(num_slots * h * w).to(self.device)
 
         # the loss
         loss = nn.CrossEntropyLoss()(inp, target)
@@ -233,7 +235,7 @@ class SlotSTDIMModel(STDIMModel):
 
         inp = scores.reshape(-1, N)
 
-        target = torch.arange(N).repeat(num_slots * h * w)
+        target = torch.arange(N).repeat(num_slots * h * w).to(self.device)
 
 
         # the loss
@@ -247,16 +249,6 @@ class SlotSTDIMModel(STDIMModel):
 
 
         return loss, acc
-
-
-
-
-
-
-
-
-
-
 
 
 
