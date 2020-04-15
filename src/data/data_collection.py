@@ -17,6 +17,7 @@ import numpy as np
 
 def get_transitions(args, seed=42, keep_as_episodes=True, min_episode_length=8, max_frames=None, max_episodes=None):
     """workhorse function: collect frames, actions, and labels and split into episodes"""
+
     rng = np.random.RandomState(seed)
     frames, labels, actions = [], [], []
     env = gym.make(args.env_name)
