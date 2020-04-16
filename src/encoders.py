@@ -155,8 +155,7 @@ class SCNEncoder(nn.Module):
         self.final_fmap_shape = (9, 6)
 
     def forward(self, x):
-        f5 = self.base_encoder.get_local_fmaps(x)
-        f7 = self.base_encoder.f5_to_f7(f5)
+        f7 = self.base_encoder.get_f7(x)
         slot_fmaps = self.slot_conv(f7)
         slots = self.fmap_to_slot(slot_fmaps)
         return slots
