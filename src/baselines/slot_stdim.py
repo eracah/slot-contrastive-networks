@@ -2,14 +2,17 @@ import torch.nn as nn
 import torch
 from .stdim import STDIMModel
 
+
 class SlotSTDIMModel(STDIMModel):
     def __init__(self, encoder, args, global_vector_len, device=torch.device('cpu'), wandb=None):
         super().__init__(encoder, args, global_vector_len, device, wandb)
+        self.args = args
         self.encoder = encoder
         self.local_len = self.encoder.feat_maps_per_slot_map
         self.global_len = self.encoder.slot_len
         self.project_to_slot_len = nn.Linear(self.local_len, self.global_len)
-        self.slot_len_to_slot_len = nn.Linear(self.local_len, self.local_len)
+        self.project_local_len_to_local_len = nn.Linear(self.local_len, self.local_len)
+        self.project_slot_len_slot_len = nn.Linear(self.global_len, self.global_len)
 
     def calc_loss(self, xt, a, xtp1):
         """ Compute loss slot-stdim loss and log it.
@@ -35,6 +38,13 @@ class SlotSTDIMModel(STDIMModel):
 
         for k, v in dict(loss1=loss_gl, loss2=loss_ll, acc1=acc_gl, acc2=acc_ll).items():
             super().log(k, v)
+
+        if "slot-space-loss" in self.args.ablations:
+            loss_ss, acc_ss = self.calc_slot_diversity_loss_in_slot_space(sv_t, sv_tp1)
+            loss += loss_ss
+
+            for k, v in dict(scn_loss=loss_ss,scn_acc=acc_ss).items():
+                super().log(k, v)
 
         return loss
 
@@ -163,7 +173,7 @@ class SlotSTDIMModel(STDIMModel):
         slot_maps1 = slot_maps1.permute(0, 3, 4, 1, 2)  # (num_slots, h, w, N, num_feat_maps_per_slot)
         slot_maps2 = slot_maps2.permute(0, 3, 4, 1, 2)  # (num_slots, h, w, N, num_feat_maps_per_slot)
 
-        slot_maps1 = self.slot_len_to_slot_len(slot_maps1)  # (num_slots, h, w, N, num_feat_maps_per_slot)
+        slot_maps1 = self.project_local_len_to_local_len(slot_maps1)  # (num_slots, h, w, N, num_feat_maps_per_slot)
 
         # prep for matmul
         slot_maps2 = slot_maps2.transpose(3, 4)  # (num_slots, h, w,  num_feat_maps_per_slot, N)
@@ -179,6 +189,27 @@ class SlotSTDIMModel(STDIMModel):
 
         # guesses
         # to compute contrastive accuracy, we can just get the argmax of each score and compare that with the target
+        guesses = torch.argmax(inp.detach(), dim=1)
+        is_correct = torch.eq(guesses, target)
+        acc = 100 * torch.mean(is_correct.to(torch.float)).item()
+
+        return loss, acc
+
+    def calc_slot_diversity_loss_in_slot_space(self, slot_vectors1, slots_vectors2):
+        """Loss 2:  Does a pair of vectors close in time come from the
+                          same slot of different slots"""
+
+        batch_size, num_slots, slot_len = slot_vectors1.shape
+
+        # logits: batch_size x num_slots x num_slots
+        #        for each example (set of 8 slots), for each slot, dot product with every other slot at next time step
+        logits = torch.matmul(self.project_slot_len_slot_len(slot_vectors1),
+                              slots_vectors2.transpose(2, 1))
+        inp = logits.reshape(batch_size * num_slots, -1)
+        target = torch.cat([torch.arange(num_slots) for i in range(batch_size)]).to(self.device)
+
+        loss = nn.CrossEntropyLoss()(inp, target)
+
         guesses = torch.argmax(inp.detach(), dim=1)
         is_correct = torch.eq(guesses, target)
         acc = 100 * torch.mean(is_correct.to(torch.float)).item()
