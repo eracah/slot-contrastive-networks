@@ -12,9 +12,19 @@ import psutil
 import wandb
 from atariari.benchmark.categorization import summary_key_dict
 from scipy.stats import entropy
+
+all_localization_keys = []
+for category_name, category_keys in summary_key_dict.items():
+    if "localization" in category_name:
+        all_localization_keys.extend(category_keys)
+
+
 # methods that need encoder trained before
 ablations = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
+
+
+
 
 def get_channels(args):
     if args.color and args.num_frame_stack == 1:
@@ -119,10 +129,6 @@ def compute_category_avgs(metric_dict):
 
 def postprocess_raw_metrics(metric_dict):
     overall_avg = compute_dict_average(metric_dict)
-    all_localization_keys = []
-    for category_name, category_keys in summary_key_dict.items():
-        if "localization" in category_name:
-            all_localization_keys.extend(category_keys)
     overall_localization_avg = np.mean([v for k, v in metric_dict.items() if k in all_localization_keys])
     category_avgs_dict = compute_category_avgs(metric_dict)
     across_categories_localization_avg = np.mean([v for k, v in category_avgs_dict.items() if "localization" in k])

@@ -13,6 +13,15 @@ from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 import copy
 from pathlib import Path
+import numpy as np
+import pandas as pd
+import copy
+from scipy.stats import entropy
+from src.utils import all_localization_keys
+
+from src.evaluation.metrics import calc_slot_importances_from_weights, compute_dci_c, compute_dci_d, select_just_localization_rows
+
+
 
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -56,12 +65,6 @@ if __name__ == "__main__":
         train_args = train_parser.parse_args(train_args)
         train_args = train_args.__dict__
 
-
-
-
-
-
-
     for k, v in train_args.items():
         if k in args:
             args.__dict__["train_" + k] = v
@@ -96,8 +99,6 @@ if __name__ == "__main__":
     num_slots = 1
 
     trainer = LinearRegressionProbe(encoder)
-
-
     k = "r2"
     trainer.train(tr_dl, val_dl)
     val_score = trainer.test(val_dl) # don't use test yet!
@@ -106,6 +107,18 @@ if __name__ == "__main__":
     test_dict = dict(zip(label_keys, val_score))
     postprocess_and_log_metrics(test_dict, prefix="concat_",
                                 suffix="_"+ k)
+
+    # compute dci_d and dci_c
+    slot_importances = calc_slot_importances_from_weights(weights, args.num_slots)
+    slot_imp_localization = select_just_localization_rows(slot_importances, label_keys)
+    dci_c = compute_dci_c(slot_imp_localization)
+    dci_d = compute_dci_d(slot_imp_localization)
+    wandb.run.summary.update(dict(dci_c=dci_c, dci_d=dci_d))
+
+
+
+
+
 
 
 
