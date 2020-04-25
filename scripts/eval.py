@@ -34,7 +34,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["eval"])
-
+    wandb.config.update(vars(args))
 
     try:
         api = wandb.Api()
