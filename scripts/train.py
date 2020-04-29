@@ -12,7 +12,7 @@ from src.data.cswm_dataloader import get_cswm_dataloader
 
 # methods that need encoder trained before
 ablations = ["hybrid", "loss1-only", "loss2-only",
-             "iterative-slotwise", "hinge-loss","structure-loss", "normalize", "slot-space-loss" ]
+             "iterative-slotwise", "hinge-loss","structure-loss", "normalize", "slot-space-loss", "slot-map-space-loss" ]
 baselines = ["supervised", "random-cnn", "stdim", "cswm"]
 methods = ["scn", "slot-stdim"]
 

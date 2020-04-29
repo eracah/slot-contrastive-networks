@@ -43,8 +43,16 @@ class SlotSTDIMModel(STDIMModel):
             loss_ss, acc_ss = self.calc_slot_diversity_loss_in_slot_space(sv_t, sv_tp1)
             loss += loss_ss
 
-            for k, v in dict(scn_loss=loss_ss,scn_acc=acc_ss).items():
+            for k, v in dict(scn_loss=loss_ss, scn_acc=acc_ss).items():
                 super().log(k, v)
+
+        elif "slot-map-space-loss" in self.args.ablations:
+            loss_sm, acc_sm = self.calc_slot_diversity_loss_in_local_fmap_space(sm_t, sm_tp1)
+            loss += loss_sm
+
+            for k, v in dict(scn_loss=loss_sm, scn_acc=acc_sm).items():
+                super().log(k, v)
+
 
         return loss
 
@@ -195,18 +203,55 @@ class SlotSTDIMModel(STDIMModel):
 
         return loss, acc
 
+
     def calc_slot_diversity_loss_in_slot_space(self, slot_vectors1, slots_vectors2):
         """Loss 2:  Does a pair of vectors close in time come from the
-                          same slot of different slots"""
+                          same slot of different slots
+
+            Arguments:
+                slot_vectors1 (torch.FloatTensor) --  a batch of outputs from the slot encoder
+                                             size: (batch_size, num_slots, slot_len)
+                                             it's a batch of sets of slot vectors
+                slot_vectors2 (torch.FloatTensor) --  a batch of outputs from the slot encoder 1 time step later
+                                             size: (batch_size, num_slots, slot_len)
+                                             it's a batch of sets of slot vectors
+                          """
 
         batch_size, num_slots, slot_len = slot_vectors1.shape
 
         # logits: batch_size x num_slots x num_slots
         #        for each example (set of 8 slots), for each slot, dot product with every other slot at next time step
-        logits = torch.matmul(self.project_slot_len_slot_len(slot_vectors1),
-                              slots_vectors2.transpose(2, 1))
+
+
+        slot_vectors1 = self.project_slot_len_slot_len(slot_vectors1) # (batch_size, num_slots, slot_len)
+        slot_vectors2 = slots_vectors2.transpose(2, 1) # (batch_size, slot_len, num_slots) preps for batched mat mul
+
+
+        # for every set of slots in batch, for each slot in set, compute dot product of that slot with every other slot in
+        # set of slots of same batch index but one time step later
+        #   logits = torch.zeros(batch_size, num_slots, num_slots)
+        #   for batch_index in range(batch_size):
+        #       for slot1_index in range(num_slots):
+        #           for slot2_index in range(num_slots):
+        #               logit = torch.dot(slot_vectors1[batch_index, slot1_index, :], slot_vectors2[batch_index, :, slot2_index])
+        #               logits[batch_index, slot1_index, slot2_index] = logit
+        logits = torch.matmul(slot_vectors1, slot_vectors2) # (batch_size, num_slots, num_slots)
+
+        # logits represents batch_size sets of num_slot different num_slot-way classification problems
+        # which is represented by batch_size different num_slot x num_slot matrices
+        # the correct logit for each row of the matrix is the diagonal of the matrix
+        # aka the the correct logit in the ith row is the ith element, so we represent that
+        # with a target variable that is a set of batch_size vectors each of value torch.arange(num_slots)
+        # [0, 1, 2, ... num_slots-1], which represents which element in each row of the matrix is the correct answer
+        target = torch.stack([torch.arange(num_slots) for i in range(batch_size)]).to(self.device)
+
+        # flatten logits to be a large set of size num_slot logits
+        # aka we now have batch_size * num_slots different num_slot-way classification problems
         inp = logits.reshape(batch_size * num_slots, -1)
-        target = torch.cat([torch.arange(num_slots) for i in range(batch_size)]).to(self.device)
+        # do the same for the target now for each of the batch_size*num_slots different num_slot-way classification problems
+        # we have an int label
+        target = target.reshape(batch_size*num_slots, -1)
+
 
         loss = nn.CrossEntropyLoss()(inp, target)
 
@@ -215,3 +260,68 @@ class SlotSTDIMModel(STDIMModel):
         acc = 100 * torch.mean(is_correct.to(torch.float)).item()
 
         return loss, acc
+
+
+    def calc_slot_diversity_loss_in_local_fmap_space(self, slot_maps1, slot_maps2):
+        """computes slot-based slot diversity local to local loss
+                Arguments:
+                    slot_maps1 (torch.FloatTensor) -- a batch of intermediate layer feature maps from the encoder
+                                                     (segregated into num_slots groups of num_feat_maps_per_slot)
+                                                      size: (batch_size, num_slots, num_feat_maps_per_slot,
+                                                            height_feat_map, width_feat_map)
+
+                   slot_maps2 (torch.FloatTensor) -- a batch of intermediate layer feature maps from the encoder
+                                                     (segregated into num_slots groups of num_feat_maps_per_slot)
+                                                      size: (batch_size, num_slots, num_feat_maps_per_slot,
+                                                            height_feat_map, width_feat_map)
+
+                Returns:
+                        loss (Torch.float): the loss
+                        acc (Torch.float): the contrastive accuracy
+
+
+                Pseudocode (non-vectorized):
+                    scores = torch.zeros(N, h, w, num_slots, num_slots)
+                    for batch_index in range(N):
+                      for i in range(h):
+                          for j in range(w):
+                              for slot1_index in range(num_slots):
+                                  for slot2_index in range(num_slots):
+                                      score = torch.dot(slot_maps1[batch_index, i, j, slot1_index, :],
+                                                        slot_maps2[batch_index, i, j, :, slot2_index])
+                                      scores[batch_index, i, j, slot1_index, slot2_index] = score
+
+                """
+        N, num_slots, num_feat_maps_per_slot, h, w = slot_maps1.shape
+        assert slot_maps1.shape == slot_maps2.shape
+
+        slot_maps1 = slot_maps1.permute(0, 3, 4, 1, 2) # (N, h, w, num_slots, num_feat_maps_per_slot)
+        slot_maps2 = slot_maps2.permute(0, 3, 4, 2, 1)# (N, h, w, num_slots, num_feat_maps_per_slot)
+
+        slot_maps1 = self.project_local_len_to_local_len(slot_maps1) # shape remains (N, h, w, num_slots,
+                                                                                    # num_feat_maps_per_slot)
+
+        # for every example in batch, for every spatial location, for every set of slotmaps in slot_maps1
+        # dot product with every other
+        # corresponding spatial location for the same batch index in slot_maps2
+        # creates N * h * w  (num_slots, num_slots) matrices, where each matrix represents num_slots num_slots-way
+        # classification problems, where the correct logit for each row is the element on the diagonal
+        logits = torch.matmul(slot_maps1, slot_maps2) # N, h, w, num_slots, num_slots)
+        inp=logits.reshape(N * h * w * num_slots, num_slots)
+
+        # ground truth is the index diagonal of all the N * h * w little (num_slot,num_slot) matrices
+        # aka torch.arange(num_slots) repeated N * h * w * num_slots times
+        target = torch.arange(num_slots).repeat(N * h * w).to(self.device)
+
+
+        loss = nn.CrossEntropyLoss()(inp, target)
+
+        guesses = torch.argmax(inp.detach(), dim=1)
+        is_correct = torch.eq(guesses, target)
+        acc = 100 * torch.mean(is_correct.to(torch.float)).item()
+
+        return loss, acc
+
+
+
+
