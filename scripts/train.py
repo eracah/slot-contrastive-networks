@@ -39,7 +39,6 @@ def get_argparser():
     parser.add_argument('--global-vector-len', type=int, default=256, help='Dimensionality of embedding.')
     parser.add_argument("--slot-len", type=int, default=32)
     parser.add_argument("--num-slots", type=int, default=8)
-    parser.add_argument("--patience", type=int, default=15)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
     parser.add_argument("--warmstart", type=int, default=0)
     parser.add_argument("--crop",nargs=2,type=int, default=[-1,-1])
@@ -69,6 +68,8 @@ def get_argparser():
                         help='Disable CUDA training.')
     parser.add_argument('--regression', action='store_true', default=False,
                         help='whether to use regression for supervised')
+    parser.add_argument('--random-cnn', action='store_true', default=False,
+                        help='whether to not learn at all and just save random weights')
     return parser
 
 def do_epoch(loader, optimizer, model, epoch):
@@ -102,27 +103,30 @@ def do_epoch(loader, optimizer, model, epoch):
 
 
 
-def get_encoder(args, sample_frame):
+def get_encoder(method, args, sample_frame):
     global_vector_len = args.global_vector_len if "global_vector_len" in args else args.embedding_dim
     input_channels = sample_frame.shape[1]
     width_height = np.asarray(sample_frame.shape[2:])
     if args.regime == "stdim":
-        if args.method == "stdim":
+        if method == "stdim":
             encoder = STDIMEncoder(input_channels,
                                    global_vector_len,
                                    ablations=args.ablations,
                                    num_slots=args.num_slots)
-        elif args.method == "slot-stdim":
+        elif method == "slot-stdim":
             encoder = SlotSTDIMEncoder(input_channels,
                                    global_vector_len,
                                    ablations=args.ablations,
                                    num_slots=args.num_slots,
                                    slot_len=args.slot_len)
 
-        else:
+        elif method == "scn":
             encoder = SCNEncoder(input_channels,
                                  slot_len=args.slot_len,
                                  num_slots=args.num_slots)
+        else:
+            assert False, "I don't recognize the method name: {}!".format(method)
+
     elif args.regime == "cswm":
         encoder = CSWMEncoder(input_dim=input_channels,
                               hidden_dim=args.hidden_dim // 16,
@@ -248,7 +252,12 @@ if __name__ == "__main__":
         tr_loader, val_loader = dataloaders
         model = get_model(encoder, args)
 
-    train_loop(model, tr_loader, val_loader)
+    if args.random_cnn:
+        args.method = "random_" + args.method
+        wandb.config.update({"method":args.method},allow_val_change=True)
+        torch.save(model.encoder.state_dict(), wandb.run.dir + "/encoder.pt")
+    else:
+        train_loop(model, tr_loader, val_loader)
 
 
 

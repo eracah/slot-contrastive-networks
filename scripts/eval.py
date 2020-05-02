@@ -83,7 +83,8 @@ if __name__ == "__main__":
     sample_frame = next(tr_dl.__iter__())[0]
     print_memory("after episodes loaded")
 
-    encoder = get_encoder(args, sample_frame=sample_frame)
+    method = args.method if "random" not in args.method else args.method.split("random_")[-1]
+    encoder = get_encoder(method, args, sample_frame=sample_frame)
     print("Loading weights from %s" % weights_path)
     encoder.load_state_dict(torch.load(weights_path, map_location=device))
     encoder.to(device)
