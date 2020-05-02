@@ -240,7 +240,7 @@ if __name__ == "__main__":
     dataloaders = get_dataloader(args, mode = "eval" if args.method == "supervised" else "train")
 
     sample_frame = next(dataloaders[0].__iter__())[0]
-    encoder = get_encoder(args, sample_frame)
+    encoder = get_encoder(args.method, args, sample_frame)
 
     if args.method == "supervised":
         tr_loader, val_loader, test_dl, label_keys = dataloaders
