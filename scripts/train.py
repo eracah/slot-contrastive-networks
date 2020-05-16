@@ -254,7 +254,7 @@ if __name__ == "__main__":
 
     if args.random_cnn:
         args.method = "random_" + args.method
-        wandb.config.update({"method":args.method},allow_val_change=True)
+        wandb.config.update({"method":"random_" + args.method}, allow_val_change=True)
         torch.save(model.encoder.state_dict(), wandb.run.dir + "/encoder.pt")
     else:
         train_loop(model, tr_loader, val_loader)
