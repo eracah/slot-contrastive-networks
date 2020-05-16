@@ -10,10 +10,28 @@ def select_just_localization_rows(array, label_keys):
     ind = pd.Index(label_keys, name="sv_name")
     df = pd.DataFrame(array, index=ind)
     loc_keys = [k for k in label_keys if k in all_localization_keys]
-    array_localization = df.loc[loc_keys].to_numpy()
-    return array_localization
+    localization_array = df.loc[loc_keys].to_numpy()
+    return localization_array, loc_keys
+
+def average_over_obj(keys, data):
+    ind = pd.Index(keys, name="sv_name")
+    df = pd.DataFrame(data, index=ind)
+    df = df.rename(index=rename_state_var_to_obj_name)
+    df = df.groupby("sv_name").mean()
+    return df.to_numpy()
 
 
+def rename_state_var_to_obj_name(state_var):
+    v = copy.deepcopy(state_var)
+    for d in ["_x", "_y", "_z"]:
+        v = v.split(d)[0]
+    return v
+
+def count_objects(label_keys):
+    loc_keys = [k for k in label_keys if k in all_localization_keys]
+    objs = list(set([rename_state_var_to_obj_name(k) for k in loc_keys]))
+    num_objs = len(objs)
+    return num_objs
 
 
 def calc_slot_importances_from_weights(weights, num_slots):
@@ -45,21 +63,6 @@ def calc_slot_importances_from_weights(weights, num_slots):
                                                      keepdims=True)
     return slot_importances
 
-def average_over_obj(label_keys, data):
-    ind = pd.Index(label_keys, name="sv_name")
-    df = pd.DataFrame(data, index=ind)
-    loc_keys = [k for k in label_keys if k in all_localization_keys]
-    df = df.loc[loc_keys]
-    df = df.rename(index=rename_state_var_to_obj_name)
-    df = df.groupby("sv_name").mean()
-    return df
-
-
-def rename_state_var_to_obj_name(state_var):
-    v = copy.deepcopy(state_var)
-    for d in ["_x","_y","_z"]:
-        v = v.split(d)[0]
-    return v
 
 
 def compute_dci_c(importances):

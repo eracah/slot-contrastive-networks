@@ -4,23 +4,41 @@ from src.encoders import ConcatenateSlots
 import argparse
 import torch
 import wandb
-from src.evaluation.probe_modules import ProbeTrainer, LinearRegressionProbe
+from src.evaluation.probe_modules import GBTRegressionProbe, LinearRegressionProbe
 import json
 import numpy as np
 from scripts.train import get_argparser as get_train_argparser
 from scripts.train import get_encoder
 from src.data.stdim_dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
-import copy
 from pathlib import Path
-import numpy as np
-import pandas as pd
 import copy
-from scipy.stats import entropy
-from src.utils import all_localization_keys
+from src.evaluation.metrics import calc_slot_importances_from_weights, compute_dci_c, \
+    compute_dci_d, select_just_localization_rows, average_over_obj
 
-from src.evaluation.metrics import calc_slot_importances_from_weights, compute_dci_c, compute_dci_d, select_just_localization_rows
 
+def compute_slot_accuracy(encoder, tr_dl, test_dl, probe_model="lin_reg"):
+    if probe_model == "lin_reg":
+        trainer = LinearRegressionProbe(encoder)
+    elif probe_model == "gbt":
+        trainer = GBTRegressionProbe(encoder)
+
+    trainer.train(tr_dl)
+    test_score = trainer.test(test_dl)
+    feature_importances = copy.deepcopy(trainer.get_feature_importances())
+    return test_score, feature_importances
+
+def compute_dci_disentangling(feat_imps, label_keys, num_slots, normalize=True):
+    if normalize:
+        weights = feat_imps
+        slot_importances = calc_slot_importances_from_weights(weights, num_slots)
+    else:
+        slot_importances = feat_imps
+    slot_imp_localization, loc_keys = select_just_localization_rows(slot_importances, label_keys)
+    obj_importances = average_over_obj(loc_keys, slot_imp_localization)     # select just object rows
+    dci_c = compute_dci_c(obj_importances)
+    dci_d = compute_dci_d(obj_importances)
+    return dci_d, dci_c
 
 
 if __name__ == "__main__":
@@ -36,6 +54,11 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type=int, default=11, help='Random seed to use')
     parser.add_argument('--lr', type=float, default=3e-4, help='Learning Rate for learning representations (default: 5e-4)')
     parser.add_argument('--batch-size', type=int, default=64, help='Mini-Batch Size (default: 64)')
+    parser.add_argument("--probe-model", type=str, default="lin_reg", choices=["lin_reg", "gbt"],
+                        help="the model type for probing")
+    parser.add_argument("--input-format", default="concat", type=str, choices=["concat","slots"],
+                        help="whether to compute slot accuracy by concatenating all\
+                             slots or probing each slot separately")
     parser.add_argument("--wandb-proj", type=str, default="coors-scratch")
     parser.add_argument("--id", type=str)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
@@ -92,49 +115,19 @@ if __name__ == "__main__":
 
     print_memory("after encoder trained/loaded")
     f1s = []
-    if args.method != "stdim":
-        encoder = ConcatenateSlots(encoder)
-        representation_len = args.num_slots * args.slot_len
-    else:
-        representation_len = args.global_vector_len
-    num_slots = 1
+    if args.input_format == "concat":
+        if args.method != "stdim":
+            encoder = ConcatenateSlots(encoder)
 
-    trainer = LinearRegressionProbe(encoder)
-    k = "r2"
-    trainer.train(tr_dl, val_dl)
-    val_score = trainer.test(val_dl) # don't use test yet!
-    weights = copy.deepcopy(trainer.get_weights())
-    np.save(wandb.run.dir + "/" + k + "_probe_weights.npy", weights)
-    test_dict = dict(zip(label_keys, val_score))
-    postprocess_and_log_metrics(test_dict, prefix="concat_",
-                                suffix="_"+ k)
+    score, weights = compute_slot_accuracy(encoder,
+                                           tr_dl,
+                                           test_dl=val_dl,
+                                           probe_model=args.probe_model)  # don't use test yet!
+    dci_d, dci_c = compute_dci_disentangling(weights, label_keys,
+                                             args.num_slots, normalize=args.probe_model == "lin_reg")
 
-    # compute dci_d and dci_c
-    slot_importances = calc_slot_importances_from_weights(weights, args.num_slots)
-    slot_imp_localization = select_just_localization_rows(slot_importances, label_keys)
-    dci_c = compute_dci_c(slot_imp_localization)
-    dci_d = compute_dci_d(slot_imp_localization)
+
+    np.save(wandb.run.dir + "/" + args.probe_model + "_probe_weights.npy", weights)
+    postprocess_and_log_metrics(dict(zip(label_keys, score)), prefix="concat_",
+                                suffix="_r2_"+ args.probe_model)
     wandb.run.summary.update(dict(dci_c=dci_c, dci_d=dci_d))
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
