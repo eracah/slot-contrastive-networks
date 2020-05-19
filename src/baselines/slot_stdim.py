@@ -1,18 +1,26 @@
 import torch.nn as nn
 import torch
-from .stdim import STDIMModel
 
-
-class SlotSTDIMModel(STDIMModel):
-    def __init__(self, encoder, args, global_vector_len, device=torch.device('cpu'), wandb=None):
-        super().__init__(encoder, args, global_vector_len, device, wandb)
+class SlotSTDIMModel(nn.Module):
+    def __init__(self, encoder, args, device, wandb=None):
+        super().__init__()
         self.args = args
+        self.losses_to_use = self.args.losses
         self.encoder = encoder
+        self.device = device
+        self.wandb = wandb
         self.local_len = self.encoder.feat_maps_per_slot_map
         self.global_len = self.encoder.slot_len
         self.project_to_slot_len = nn.Linear(self.local_len, self.global_len)
         self.project_local_len_to_local_len = nn.Linear(self.local_len, self.local_len)
         self.project_slot_len_slot_len = nn.Linear(self.global_len, self.global_len)
+
+
+    def log(self, name, scalar):
+        if self.training:
+            self.wandb.log({"tr_"+ name: scalar})
+        else:
+            self.wandb.log({"val_"+ name: scalar})
 
     def calc_loss(self, xt, a, xtp1):
         """ Compute loss slot-stdim loss and log it.
@@ -31,30 +39,104 @@ class SlotSTDIMModel(STDIMModel):
         sv_t, sv_tp1 = self.encoder(xt), self.encoder(xtp1)
         sm_t, sm_tp1 = self.encoder.get_slot_maps(xt), self.encoder.get_slot_maps(xtp1)
 
-        loss_gl, acc_gl = self.calc_slot_global_to_local_loss(sv_t, sm_tp1)
-        loss_ll, acc_ll = self.calc_slot_local_to_local_loss(sm_t, sm_tp1)
+        loss = 0.0
+        if "hcn" in self.losses_to_use:
+            loss_gl, acc_gl = self.calc_slot_global_to_local_loss(sv_t, sm_tp1)
+            loss += loss_gl
 
-        loss = loss_gl + loss_ll
+            for k, v in dict(loss_gl=loss_gl, acc_gl=acc_gl).items():
+                self.log(k, v)
 
-        for k, v in dict(loss1=loss_gl, loss2=loss_ll, acc1=acc_gl, acc2=acc_ll).items():
-            super().log(k, v)
+        if "smcn" in self.losses_to_use:
+            loss_ll, acc_ll = self.calc_slot_local_to_local_loss(sm_t, sm_tp1)
+            loss += loss_ll
 
-        if "slot-space-loss" in self.args.ablations:
+            for k, v in dict(loss_ll=loss_ll, acc_ll=acc_ll).items():
+                self.log(k, v)
+
+        if "scn" in self.losses_to_use:
+            loss_sv, acc_sv = self.calc_slot_global_to_global_loss(sv_t, sv_tp1)
+            loss += loss_sv
+
+            for k, v in dict(loss_sv=loss_sv, acc_sv=acc_sv).items():
+                self.log(k, v)
+
+        if "sdl" in self.losses_to_use:
             loss_ss, acc_ss = self.calc_slot_diversity_loss_in_slot_space(sv_t, sv_tp1)
             loss += loss_ss
 
-            for k, v in dict(scn_loss=loss_ss, scn_acc=acc_ss).items():
-                super().log(k, v)
+            for k, v in dict(loss_ss=loss_ss, acc_ss=acc_ss).items():
+                self.log(k, v)
 
-        elif "slot-map-space-loss" in self.args.ablations:
+        if "smdl" in self.losses_to_use:
             loss_sm, acc_sm = self.calc_slot_diversity_loss_in_local_fmap_space(sm_t, sm_tp1)
             loss += loss_sm
 
-            for k, v in dict(scn_loss=loss_sm, scn_acc=acc_sm).items():
-                super().log(k, v)
+            for k, v in dict(loss_sm=loss_sm, acc_ss=acc_sm).items():
+                self.log(k, v)
 
 
         return loss
+
+
+    def calc_slot_global_to_global_loss(self, slot_vectors1, slot_vectors2):
+        """ oss 1: Does a pair of slot vectors from the same slot
+                   come from consecutive (or within a small window) time steps or not?
+
+            Arguments:
+                slot_vectors1 (torch.FloatTensor) --  a batch of outputs from the slot encoder
+                                             size: (batch_size, num_slots, slot_len)
+                                             it's a batch of sets of slot vectors
+                slot_vectors2 (torch.FloatTensor) --  a batch of outputs from the slot encoder 1 time step later
+                                             size: (batch_size, num_slots, slot_len)
+                                             it's a batch of sets of slot vectors
+                          """
+
+        batch_size, num_slots, slot_len = slot_vectors1.shape
+
+        # logits: batch_size x num_slots x num_slots
+        #        for each example (set of 8 slots), for each slot, dot product with every other slot at next time step
+
+
+        slot_vectors1 = self.project_slot_len_slot_len(slot_vectors1) # (batch_size, num_slots, slot_len)
+        slot_vectors1 = slot_vectors1.transpose(1, 0) # (num_slots, batch_size, slot_len)
+        slot_vectors2 = slot_vectors2.permute(1, 2, 0) # (num_slots, slot_len, batch_size) preps for batched mat mul
+
+
+        # for every set of slots in batch, for each slot in set, compute dot product of that slot with every other slot in
+        # set of slots of same batch index but one time step later
+        #   logits = torch.zeros(num_slots, batch_size, batch_size)
+        #   for slot_index in range(num_slots):
+        #       for batch_index1 in range(batch_size):
+        #           for batch_index2 in range(batch_size):
+        #               logit = torch.dot(slot_vectors1[slot_index, batch1_index, :], slot_vectors2[slot_index, :, batch2_index])
+        #               logits[slot_index, batch1_index, batch2_index] = logit
+        logits = torch.matmul(slot_vectors1, slot_vectors2) # (num_slots, batch_size, batch_size)
+
+        # logits represents num_slot sets of batch_size different batch_size-way classification problems
+        # which is represented by num_slot different batch_size x batch_size matrices
+        # the correct logit for each row of the matrix is the diagonal of the matrix
+        # aka the the correct logit in the ith row is the ith element, so we represent that
+        # with a target variable that is a set of num_slot vectors each of value torch.arange(batch_size)
+        # [0, 1, 2, ... nbatch_size-1], which represents which element in each row of the matrix is the correct answer
+        target = torch.stack([torch.arange(batch_size) for i in range(num_slots)]).to(self.device)
+
+        # flatten logits to be a large set of size batch_size logits
+        # aka we now have batch_size * num_slots different batch_size-way classification problems
+        inp = logits.reshape(batch_size * num_slots, -1)
+        # do the same for the target now for each of the batch_size*num_slots different batch_size-way classification problems
+        # we have an int label
+        target = target.reshape(batch_size*num_slots,)
+
+
+        loss = nn.CrossEntropyLoss()(inp, target)
+
+        guesses = torch.argmax(inp.detach(), dim=1)
+        is_correct = torch.eq(guesses, target)
+        acc = 100 * torch.mean(is_correct.to(torch.float)).item()
+
+        return loss, acc
+
 
     def calc_slot_global_to_local_loss(self, slot_vectors, slot_maps):
         """ Compute slot-based global to local loss.
@@ -250,7 +332,7 @@ class SlotSTDIMModel(STDIMModel):
         inp = logits.reshape(batch_size * num_slots, -1)
         # do the same for the target now for each of the batch_size*num_slots different num_slot-way classification problems
         # we have an int label
-        target = target.reshape(batch_size*num_slots, -1)
+        target = target.reshape(batch_size*num_slots,)
 
 
         loss = nn.CrossEntropyLoss()(inp, target)

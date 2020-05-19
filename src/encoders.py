@@ -40,13 +40,12 @@ init_ = lambda m: init(m,
 
 
 class STDIMEncoder(nn.Module):
-    def __init__(self, input_channels, global_vector_len, ablations=[], num_slots=8):
+    def __init__(self, input_channels, global_vector_len):
         super().__init__()
         self.global_vector_len = global_vector_len
         self.final_conv_size = 64 * 9 * 6
         self.final_conv_shape = (64, 9, 6)
-        self.ablations = ablations
-        self.num_slots = num_slots
+
 
 
         self.layers = nn.Sequential(
@@ -84,21 +83,15 @@ class STDIMEncoder(nn.Module):
 
     def forward(self, x):
         global_vec = self.layers(x)
-        if "normalize" in self.ablations:
-            if "structure-loss" in self.ablations:
-                slots = global_vec.reshape(global_vec.shape[0], self.num_slots, -1)
-                slots = slots / slots.norm(p=2,dim=2, keepdim=True)
-                global_vec = slots.reshape(-1,self.global_vector_len)
-            else:
-                global_vec = global_vec / global_vec.norm(p=2, dim=1, keepdim=True)
-
         return global_vec
 
 
-
 class SlotSTDIMEncoder(STDIMEncoder):
-    def __init__(self, input_channels, global_vector_len, ablations=[], num_slots=8, slot_len=32):
-        super().__init__(input_channels, global_vector_len, ablations, num_slots)
+    def __init__(self, input_channels, ablations=[], num_slots=8, slot_len=32):
+        global_vector_len = 1 # for the last layer of st-dim which we don't use
+        super().__init__(input_channels,
+                         global_vector_len=global_vector_len)
+        self.num_slots = num_slots
         self.slot_len = slot_len
         self.feat_maps_per_slot_map = super().local_vector_len // num_slots
         self.final_conv_shape = [ self.feat_maps_per_slot_map // 2, *self.final_conv_shape[1:]]
@@ -112,16 +105,22 @@ class SlotSTDIMEncoder(STDIMEncoder):
                   )
         )
 
-    def get_slot_maps(self, x):
-        f5 = super().get_f5(x)
-        bs, ch, h, w = f5.shape
-        slot_maps = f5.reshape(bs, self.num_slots, -1, h, w)
-        return slot_maps
+
 
     def forward(self, x):
         slot_maps = self.get_slot_maps(x)
         slots = self.slot_maps_to_slots(slot_maps)
         return slots
+
+    def get_slot_maps(self, x):
+        f5 = super().get_f5(x)
+        bs, num_channels, h, w = f5.shape
+        # in order for num_channels to evenly divide by num_slots
+        # we subtract the remainder
+        chopped_num_channels = num_channels - num_channels % self.num_slots
+        reduced_f5 = f5[:, :chopped_num_channels]
+        slot_maps = reduced_f5.reshape(bs, self.num_slots, -1, h, w)
+        return slot_maps
 
     def slot_maps_to_slots(self, slot_maps):
         bs, num_slots, feat_maps_per_slot_map, h, w = slot_maps.shape
@@ -135,29 +134,6 @@ class SlotSTDIMEncoder(STDIMEncoder):
 
         # now we have number of examples by number of slots by slot_len
         slots = all_slots.reshape(bs, num_slots, -1)
-        return slots
-
-
-class SCNEncoder(nn.Module):
-    def __init__(self, input_dim, slot_len, num_slots):
-        super().__init__()
-        self.base_encoder = STDIMEncoder(input_channels=input_dim, global_vector_len=slot_len)
-        self.num_slots = num_slots
-        self.slot_len = slot_len
-        self.slot_conv = nn.Sequential(
-                            nn.Conv2d(64, num_slots, 1),
-                            nn.ReLU()
-        )
-        self.final_conv_size = 9 * 6
-        self.fmap_to_slot = nn.Sequential(SlotFlatten(),
-            init_(nn.Linear(self.final_conv_size, self.slot_len))
-        )
-        self.final_fmap_shape = (9, 6)
-
-    def forward(self, x):
-        f7 = self.base_encoder.get_f7(x)
-        slot_fmaps = self.slot_conv(f7)
-        slots = self.fmap_to_slot(slot_fmaps)
         return slots
 
 
