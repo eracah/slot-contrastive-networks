@@ -1,13 +1,9 @@
-import argparse
 import copy
 import os
-import subprocess
-
 import torch
 import numpy as np
 from sklearn.metrics import f1_score as compute_f1_score
 from collections import defaultdict
-from pathlib import Path
 import psutil
 import wandb
 from atariari.benchmark.categorization import summary_key_dict
@@ -15,11 +11,23 @@ from scipy.stats import entropy
 from scipy.stats import entropy as compute_entropy
 from collections import Counter
 
+def reformat_label_keys(label_keys):
+    return [reformat_label_str(label_key)
+     for label_key in label_keys]
+
+def reformat_label_str(label_key):
+    '''Put _x, _y, or _z to end of string'''
+    for suffix in ["_x", "_y", "_z"]:
+        if suffix in label_key:
+            label_key_substrs = label_key.split(suffix)
+            label_key = "".join(label_key_substrs) + suffix
+    return label_key
+
 all_localization_keys = []
 for category_name, category_keys in summary_key_dict.items():
     if "localization" in category_name:
-        all_localization_keys.extend(category_keys)
-
+        reformatted_keys = reformat_label_keys(category_keys)
+        all_localization_keys.extend(reformatted_keys)
 
 def get_sample_frame(dataloader):
     sample_frame = next(dataloader.__iter__())[0]
@@ -29,10 +37,14 @@ def get_sample_label(dataloader):
     sample_label = next(dataloader.__iter__())[-1]
     return sample_label
 
-def get_label_keys(dataloader):
-    sample_label = get_sample_label(dataloader)
-    label_keys = sample_label.keys()
-    return label_keys
+
+
+# def get_label_keys(dataloader):
+#     sample_label = get_sample_label(dataloader)
+#     sample_label_keys = sample_label.keys()
+#     label_keys = [reformat_label_str(label_key)
+#                   for label_key in sample_label_keys]
+#     return label_keys
 
 
 def flatten_labels(eps_labels):
@@ -88,7 +100,7 @@ def get_obj_list(label_keys):
 def rename_state_var_to_obj_name(state_var):
     v = copy.deepcopy(state_var)
     for d in ["_x", "_y", "_z"]:
-        v = v.split(d)[0]
+        v = v.replace(d, "")
     return v
 
 def get_num_objects(label_keys):
