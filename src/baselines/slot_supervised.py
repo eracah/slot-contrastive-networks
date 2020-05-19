@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 import numpy as np
 from src.utils import calculate_accuracy, calculate_multiple_accuracies, \
-    get_obj_list, all_localization_keys
+    get_obj_list, all_localization_keys, rename_state_var_to_obj_name
 
 
 class SupervisedModel(nn.Module):
@@ -34,11 +34,14 @@ class SupervisedModel(nn.Module):
         """Make mask to mask out which predictions from each slot to use"""
         key_order = []
         mask = torch.zeros(self.num_slots, self.num_state_variables)
-        for j, sv_key in enumerate(self.label_keys):
-            for i, obj_key in enumerate(self.obj_list):
-                if sv_key in self.loc_keys and obj_key in sv_key:
-                    mask[i, j] = 1
-                    key_order.append(sv_key)
+
+        for loc_key in self.loc_keys:
+            for obj_ind, obj_key in enumerate(self.obj_list):
+                obj_name = rename_state_var_to_obj_name(loc_key)
+                if obj_name == obj_key:
+                    label_ind = self.label_keys.index(loc_key)
+                    mask[obj_ind, label_ind] = 1
+                    key_order.append(loc_key)
 
         assert key_order == self.loc_keys
         return mask.bool()

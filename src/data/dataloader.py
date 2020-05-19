@@ -5,7 +5,7 @@ except:
     pass
 import torch
 from src.data.data_collection import get_transitions, EpisodeDataset
-from src.utils import appendabledict, remove_duplicates, remove_low_entropy_labels
+from src.utils import appendabledict, reformat_label_keys, remove_duplicates, remove_low_entropy_labels
 
 def get_dataloaders(args, keep_as_episodes=True, test_set=False, label_keys=False):
     data, actions, labels = get_transitions(args,
@@ -27,6 +27,7 @@ def get_dataloaders(args, keep_as_episodes=True, test_set=False, label_keys=Fals
             lab_keys = list(labels.keys())
         else:
             lab_keys = list(labels[0].keys())
+        lab_keys = reformat_label_keys(lab_keys)
         return dataloaders, lab_keys
     else:
         return dataloaders
