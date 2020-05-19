@@ -9,7 +9,7 @@
 
 export WANDB_RUN_DIR=$SLURM_TMPDIR/wandb/train_run
 export WANDB_TR_RUN_DIR=$WANDB_RUN_DIR
-python -m scripts.train $@
+python -m scripts.train $@ --run-dir $WANDB_RUN_DIR
 cp -r  $SLURM_TMPDIR/wandb/* /network/tmp1/racaheva/coors/wandb
 export WANDB_RUN_DIR=$SLURM_TMPDIR/wandb/eval_run
 python -m scripts.eval --wandb-proj coors-production  --id `cat ./wandb_id.txt` --tr-dir $WANDB_TR_RUN_DIR
