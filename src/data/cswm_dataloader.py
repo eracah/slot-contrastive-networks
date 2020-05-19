@@ -12,8 +12,7 @@ if str(Path.cwd()) not in sys.path:
     sys.path.insert(0, str(Path.cwd()))
 
 from src.data.data_collection import get_transitions,  EpisodeDataset
-from src.data.stdim_dataloader import get_stdim_eval_dataloader
-import argparse
+from src.data.dataloader import get_stdim_eval_dataloader
 import torch
 
 
