@@ -4,7 +4,7 @@ import copy
 from scipy.stats import entropy
 
 
-from src.utils import all_localization_keys
+from src.utils import all_localization_keys, rename_state_var_to_obj_name
 
 def select_just_localization_rows(array, label_keys):
     ind = pd.Index(label_keys, name="sv_name")
@@ -21,17 +21,9 @@ def average_over_obj(keys, data):
     return df.to_numpy()
 
 
-def rename_state_var_to_obj_name(state_var):
-    v = copy.deepcopy(state_var)
-    for d in ["_x", "_y", "_z"]:
-        v = v.split(d)[0]
-    return v
 
-def count_objects(label_keys):
-    loc_keys = [k for k in label_keys if k in all_localization_keys]
-    objs = list(set([rename_state_var_to_obj_name(k) for k in loc_keys]))
-    num_objs = len(objs)
-    return num_objs
+
+
 
 
 def calc_slot_importances_from_weights(weights, num_slots):
