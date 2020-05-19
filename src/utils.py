@@ -12,6 +12,8 @@ import psutil
 import wandb
 from atariari.benchmark.categorization import summary_key_dict
 from scipy.stats import entropy
+from scipy.stats import entropy as compute_entropy
+from collections import Counter
 
 all_localization_keys = []
 for category_name, category_keys in summary_key_dict.items():
@@ -19,12 +21,80 @@ for category_name, category_keys in summary_key_dict.items():
         all_localization_keys.extend(category_keys)
 
 
-# methods that need encoder trained before
-ablations = ["nce", "infonce","shared_score_fxn", "loss1_only", "loss2_only"]
-baselines = ["supervised", "random-cnn", "stdim", "cswm"]
+def get_sample_frame(dataloader):
+    sample_frame = next(dataloader.__iter__())[0]
+    return sample_frame
+
+def get_sample_label(dataloader):
+    sample_label = next(dataloader.__iter__())[-1]
+    return sample_label
+
+def get_label_keys(dataloader):
+    sample_label = get_sample_label(dataloader)
+    label_keys = sample_label.keys()
+    return label_keys
 
 
+def flatten_labels(eps_labels):
+    labels = appendabledict()
+    for ep_label in eps_labels:
+        labels.extend_update(ep_label)
+    return labels
 
+def remove_low_entropy_labels(labels, entropy_threshold=0.6):
+    """remove any state variable, whose distribution of realizations has low entropy"""
+    low_entropy_labels = []
+    for k,v in labels.items():
+        vcount = np.asarray(list(Counter(v).values()))
+        v_entropy = compute_entropy(vcount)
+        if v_entropy < entropy_threshold:
+            print("Deleting {} for being too low in entropy! Sorry, dood!".format(k))
+            low_entropy_labels.append(k)
+    for k in low_entropy_labels:
+        labels.pop(k)
+
+    return labels
+
+def remove_duplicates(frames, labels):
+    """
+    Remove any items in test_eps (&test_labels) which are present in tr/val_eps
+    """
+    test_frames = frames[-1]
+    ref_frames = frames[:-1]
+    test_labels = labels[-1]
+    num_test_frames = test_frames.shape[0]
+    ref_set = []
+    for ref_frame in ref_frames:
+        ref_set.extend([x.numpy().tostring() for x in ref_frame])
+    ref_set = set(ref_set)
+
+    filtered_test_inds = [i for i, obs in enumerate(test_frames) if obs.numpy().tostring() not in ref_set]
+    test_frames = torch.stack([test_frames[i] for i in filtered_test_inds])
+    filtered_test_labels = appendabledict()
+    filtered_test_labels.extend_updates([test_labels.subslice(slice(i, i + 1)) for i in filtered_test_inds])
+    test_labels = filtered_test_labels
+
+    dups = num_test_frames - test_frames.shape[0]
+    print('Duplicates: {}, New Test Len: {}'.format(dups, test_frames.shape[0]))
+    frames = [*ref_frames, test_frames]
+    labels = [*labels[:-1], test_labels]
+    return frames, labels
+
+def get_obj_list(label_keys):
+    loc_keys = [k for k in label_keys if k in all_localization_keys]
+    objs = list(set([rename_state_var_to_obj_name(k) for k in loc_keys]))
+    return objs
+
+def rename_state_var_to_obj_name(state_var):
+    v = copy.deepcopy(state_var)
+    for d in ["_x", "_y", "_z"]:
+        v = v.split(d)[0]
+    return v
+
+def get_num_objects(label_keys):
+    objs = get_obj_list(label_keys)
+    num_objs = len(objs)
+    return num_objs
 
 def get_channels(args):
     if args.color and args.num_frame_stack == 1:

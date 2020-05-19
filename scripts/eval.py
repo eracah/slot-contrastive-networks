@@ -9,7 +9,7 @@ import json
 import numpy as np
 from scripts.train import get_argparser as get_train_argparser
 from scripts.train import get_encoder
-from src.data.stdim_dataloader import get_stdim_dataloader
+from src.data.dataloader import get_stdim_dataloader
 from src.data.cswm_dataloader import get_cswm_dataloader
 from pathlib import Path
 import copy
@@ -101,13 +101,13 @@ if __name__ == "__main__":
     elif args.regime == "cswm":
         dataloaders = get_cswm_dataloader(args, mode="eval")
 
-    tr_dl, val_dl, test_dl, label_keys = dataloaders
+
     wandb.run.summary.update(dict(label_keys=label_keys))
     sample_frame = next(tr_dl.__iter__())[0]
     print_memory("after episodes loaded")
 
-    method = args.method if "random" not in args.method else args.method.split("random_")[-1]
-    encoder = get_encoder(method, args, sample_frame=sample_frame)
+
+    encoder = get_encoder(args, sample_frame)
     print("Loading weights from %s" % weights_path)
     encoder.load_state_dict(torch.load(weights_path, map_location=device))
     encoder.to(device)
