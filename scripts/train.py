@@ -106,16 +106,16 @@ def get_encoder(args, sample_frame):
     if args.method == "stdim":
         encoder = STDIMEncoder(input_channels,
                                global_vector_len=args.global_vector_len)
-    elif args.method in ["slot-stdim", "supervised", "random-cnn"]:
+    elif args.method in ["slot-stdim", "supervised", "random-cnn", "cswm"]:
         encoder = SlotSTDIMEncoder(input_channels,
                                    num_slots=args.num_slots,
                                    slot_len=args.slot_len)
-    elif args.method in ["cswm"]:
-        encoder = CSWMEncoder(input_dim=input_channels,
-                              hidden_dim=args.hidden_dim // 16,
-                              num_objects=args.num_slots,
-                              output_dim=args.slot_len,
-                              width_height=width_height)
+    # elif args.method in ["cswm"]:
+    #     encoder = CSWMEncoder(input_dim=input_channels,
+    #                           hidden_dim=args.hidden_dim // 16,
+    #                           num_objects=args.num_slots,
+    #                           output_dim=args.slot_len,
+    #                           width_height=width_height)
     else:
         assert False, "I don't recognize the method name: {}!".format(args.method)
 

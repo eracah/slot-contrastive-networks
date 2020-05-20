@@ -83,26 +83,6 @@ else:
         if args.regime == "stdim":
             sargs.extend(["--regime", "stdim", "--color",  "--lr",  "3e-4",  "--num-frames", "100000", "--batch-size", "128", "--epochs", "100"])
 
-        elif args.regime == "cswm":
-            sargs.extend(['--regime', 'cswm', "--color", '--num-episodes', '1000', '--slot-len', '4', '--action-dim', '6', '--num-slots', '3',
-             '--copy-action',"--noop-max", "0", "--num-frame-stack", "2", "--screen-size", "50", "50", '--frameskip', '4',
-                          '--hidden-dim', '512', "--max-episode-steps", "11"])
-            if env in ["space_invaders", "pong"]:
-                sargs.extend(["--num-slots", "3"])
-                if env == "pong":
-                    sargs.extend([ '--crop', '35', '190'])
-                    #"--crop", "35", "190", "--warmstart", "58",
-                else:
-                    sargs.extend([ "--crop", '30', '200'])
-                    #"--crop", "30", "200", "--warmstart", "50",
-            else:
-                sargs.extend(["--num-slots", "5"])
-            if args.method == "cswm":
-                sargs.extend([ '--epochs', '200',  '--lr', '5e-4', '--batch-size', '1024'])
-            else:
-                sargs.extend(['--lr', '5e-4'])
-                sargs.extend(['--epochs', str(args.epochs), '--batch-size', str(args.batch_size)])
-
 
 
         sargs.extend(["--method", args.method])
