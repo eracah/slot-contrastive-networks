@@ -58,7 +58,7 @@ envs = ['asteroids',
 'video_pinball',
 'yars_revenge']
 
-envs = ['freeway', 'ms_pacman','breakout','asteroids']
+envs = ['freeway', 'ms_pacman','breakout', 'asteroids']
 if args.envs != "None":
     envs = args.envs
 
