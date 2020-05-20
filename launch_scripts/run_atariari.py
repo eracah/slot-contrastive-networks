@@ -35,11 +35,11 @@ ss= "launch_scripts/" + file
 run_args = [base_cmd, ss]
 #run_args.extend(sys.argv[1:])
 
-envs = ['asteroids',
+envs = [#'asteroids',
 'berzerk',
 'bowling',
 'boxing',
-'breakout',
+#'breakout',
 'demon_attack',
 #'freeway',
 'frostbite',
@@ -58,7 +58,7 @@ envs = ['asteroids',
 'video_pinball',
 'yars_revenge']
 
-envs = ['freeway', 'ms_pacman','breakout', 'asteroids']
+#envs = ['freeway', 'ms_pacman','breakout', 'asteroids']
 if args.envs != "None":
     envs = args.envs
 
