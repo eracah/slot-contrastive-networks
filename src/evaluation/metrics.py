@@ -21,11 +21,6 @@ def average_over_obj(keys, data):
     return df.to_numpy()
 
 
-
-
-
-
-
 def calc_slot_importances_from_weights(weights, num_slots):
     """Computes the feature importances aka slot importances given
     weights from a linear regressor or mlp regressor
