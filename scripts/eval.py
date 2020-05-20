@@ -114,7 +114,7 @@ if __name__ == "__main__":
             encoder = ConcatenateSlots(encoder)
 
 
-    for probe_model in ["lin_reg", "lin_reg"]:
+    for probe_model in ["lin_reg", "gbt"]:
         score, weights = compute_slot_accuracy(encoder,
                                                tr_dl,
                                                test_dl=val_dl,
