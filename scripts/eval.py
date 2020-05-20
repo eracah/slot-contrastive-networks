@@ -114,15 +114,16 @@ if __name__ == "__main__":
             encoder = ConcatenateSlots(encoder)
 
 
-    score, weights = compute_slot_accuracy(encoder,
-                                           tr_dl,
-                                           test_dl=val_dl,
-                                           probe_model=args.probe_model)  # don't use test yet!
-    dci_d, dci_c = compute_dci_disentangling(weights, label_keys,
-                                             args.num_slots, normalize=args.probe_model == "lin_reg")
+    for probe_model in ["lin_reg", "lin_reg"]:
+        score, weights = compute_slot_accuracy(encoder,
+                                               tr_dl,
+                                               test_dl=val_dl,
+                                               probe_model=probe_model)  # don't use test yet!
+        dci_d, dci_c = compute_dci_disentangling(weights, label_keys,
+                                                 args.num_slots, normalize=probe_model == "lin_reg")
 
 
-    np.save(wandb.run.dir + "/" + args.probe_model + "_probe_weights.npy", weights)
-    postprocess_and_log_metrics(dict(zip(label_keys, score)), prefix="concat_",
-                                suffix="_r2_"+ args.probe_model)
-    wandb.run.summary.update(dict(dci_c=dci_c, dci_d=dci_d))
+        np.save(wandb.run.dir + "/" + probe_model + "_probe_weights.npy", weights)
+        postprocess_and_log_metrics(dict(zip(label_keys, score)), prefix="concat_",
+                                    suffix="_r2_"+ probe_model)
+        wandb.run.summary.update({"dci_c_" + probe_model :dci_c, "dci_d_" + probe_model:dci_d})
