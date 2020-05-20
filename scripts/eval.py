@@ -9,8 +9,7 @@ import json
 import numpy as np
 from scripts.train import get_argparser as get_train_argparser
 from scripts.train import get_encoder
-from src.data.dataloader import get_stdim_dataloader
-from src.data.cswm_dataloader import get_cswm_dataloader
+from src.data.dataloader import get_dataloaders
 from pathlib import Path
 import copy
 from src.evaluation.metrics import calc_slot_importances_from_weights, compute_dci_c, \
@@ -96,12 +95,7 @@ if __name__ == "__main__":
 
     wandb.config.update(vars(args))
 
-    if args.regime == "stdim":
-        dataloaders = get_stdim_dataloader(args, mode="eval")
-    elif args.regime == "cswm":
-        dataloaders = get_cswm_dataloader(args, mode="eval")
-
-
+    (tr_dl, val_dl, test_dl), label_keys = get_dataloaders(args, keep_as_episodes=False, test_set=True, label_keys=True)
     wandb.run.summary.update(dict(label_keys=label_keys))
     sample_frame = next(tr_dl.__iter__())[0]
     print_memory("after episodes loaded")
@@ -118,6 +112,7 @@ if __name__ == "__main__":
     if args.input_format == "concat":
         if args.method != "stdim":
             encoder = ConcatenateSlots(encoder)
+
 
     score, weights = compute_slot_accuracy(encoder,
                                            tr_dl,
