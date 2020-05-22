@@ -12,8 +12,7 @@ from scripts.train import get_encoder
 from src.data.dataloader import get_dataloaders
 from pathlib import Path
 import copy
-from src.evaluation.metrics import calc_slot_importances_from_weights, compute_dci_c, \
-    compute_dci_d, select_just_localization_rows, average_over_obj
+from src.evaluation.metrics import compute_dci_disentangling
 
 
 def compute_slot_accuracy(encoder, tr_dl, test_dl, probe_model="lin_reg"):
@@ -27,17 +26,7 @@ def compute_slot_accuracy(encoder, tr_dl, test_dl, probe_model="lin_reg"):
     feature_importances = copy.deepcopy(trainer.get_feature_importances())
     return test_score, feature_importances
 
-def compute_dci_disentangling(feat_imps, label_keys, num_slots, normalize=True):
-    if normalize:
-        weights = feat_imps
-        slot_importances = calc_slot_importances_from_weights(weights, num_slots)
-    else:
-        slot_importances = feat_imps
-    slot_imp_localization, loc_keys = select_just_localization_rows(slot_importances, label_keys)
-    obj_importances = average_over_obj(loc_keys, slot_imp_localization)     # select just object rows
-    dci_c = compute_dci_c(obj_importances)
-    dci_d = compute_dci_d(obj_importances)
-    return dci_d, dci_c
+
 
 
 if __name__ == "__main__":

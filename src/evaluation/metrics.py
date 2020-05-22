@@ -1,10 +1,30 @@
 import numpy as np
 import pandas as pd
-import copy
 from scipy.stats import entropy
-
-
 from src.utils import all_localization_keys, rename_state_var_to_obj_name
+
+def compute_dci_disentangling(feat_imps, label_keys, num_slots, normalize=True):
+
+    """
+       args:
+            feat_imps (array): num_labels x (slot_len*num_slots)_ array (normalized if from gbt otherwise not
+            label_keys (list[str]): list of len num_labels with str for label names
+            num_slots (int):  number of slots
+            normalize (bool): whether to normalize the feat_imps or not (yes for lin_reg no for gbt"""
+
+    slot_importances = calc_slot_importances_from_weights(feat_imps,
+                                                          num_slots,
+                                                          normalize=normalize)
+
+    # (num_localization_labels x num_slots)
+    slot_imp_localization, loc_keys = select_just_localization_rows(slot_importances, label_keys)
+
+    # (num_objects x num_slots)
+    obj_importances = average_over_obj(loc_keys, slot_imp_localization)     # select just object rows
+
+    dci_c = compute_dci_c(obj_importances) # int -> average dci completeness
+    dci_d = compute_dci_d(obj_importances) # int -> average dci disentangling
+    return dci_d, dci_c
 
 def select_just_localization_rows(array, label_keys):
     ind = pd.Index(label_keys, name="sv_name")
@@ -21,7 +41,7 @@ def average_over_obj(keys, data):
     return df.to_numpy()
 
 
-def calc_slot_importances_from_weights(weights, num_slots):
+def calc_slot_importances_from_weights(weights, num_slots, normalize=False):
     """Computes the feature importances aka slot importances given
     weights from a linear regressor or mlp regressor
 
@@ -44,10 +64,14 @@ def calc_slot_importances_from_weights(weights, num_slots):
     #sum all the weights (there should be "slot_len" of them that correspond to a slot
     raw_slot_importances = np.sum(slot_magnitudes, axis=2)
 
-    # normalize slot importances
-    slot_importances = raw_slot_importances / np.sum(raw_slot_importances,
-                                                     axis=1,
-                                                     keepdims=True)
+    if normalize:
+        # normalize slot importances
+        slot_importances = raw_slot_importances / np.sum(raw_slot_importances,
+                                                         axis=1,
+                                                         keepdims=True)
+    else:
+        slot_importances = raw_slot_importances
+
     return slot_importances
 
 
