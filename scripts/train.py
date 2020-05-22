@@ -46,7 +46,7 @@ def get_argparser():
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument('--method', type=str, default='scn', choices=baselines + methods,
                         help='Method to use for training representations (default: scn')
-    parser.add_argument('--losses', nargs="+", type=str, default=["hcn"], choices=losses,
+    parser.add_argument('--losses', nargs="+", type=str, choices=losses,
                         help='Ablation of scn (default: scn')
     parser.add_argument('--global-vector-len', type=int, default=256, help='Dimensionality of embedding.')
     parser.add_argument("--slot-len", type=int, default=32)
