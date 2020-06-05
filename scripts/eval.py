@@ -51,9 +51,11 @@ if __name__ == "__main__":
     parser.add_argument("--id", type=str)
     parser.add_argument("--entropy-threshold", type=float, default=0.6)
     parser.add_argument("--max-episode-steps", type=int, default=-1)
+    parser.add_argument("--test", action='store_true', default=False)
     args = parser.parse_args()
 
-    wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=["eval"])
+    tag = "test" if args.test else "eval"
+    wandb.init(project=args.wandb_proj, dir=args.run_dir, tags=[tag])
     wandb.config.update(vars(args))
 
     try:
@@ -103,10 +105,11 @@ if __name__ == "__main__":
             encoder = ConcatenateSlots(encoder)
 
 
+    probe_dl = test_dl if args.test else val_dl
     for probe_model in ["lin_reg", "gbt"]:
         score, weights = compute_slot_accuracy(encoder,
                                                tr_dl,
-                                               test_dl=val_dl,
+                                               test_dl=probe_dl,
                                                probe_model=probe_model)  # don't use test yet!
         dci_d, dci_c = compute_dci_disentangling(weights, label_keys,
                                                  args.num_slots, normalize=probe_model == "lin_reg")
