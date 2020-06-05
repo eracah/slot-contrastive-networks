@@ -111,11 +111,13 @@ if __name__ == "__main__":
                                                tr_dl,
                                                test_dl=probe_dl,
                                                probe_model=probe_model)  # don't use test yet!
-        dci_d, dci_c = compute_dci_disentangling(weights, label_keys,
-                                                 args.num_slots, normalize=probe_model == "lin_reg")
+        if args.method != "stdim":
+            dci_d, dci_c = compute_dci_disentangling(weights, label_keys,
+                                                     args.num_slots, normalize=probe_model == "lin_reg")
 
+            wandb.run.summary.update({"dci_c_" + probe_model: dci_c, "dci_d_" + probe_model: dci_d})
 
         np.save(wandb.run.dir + "/" + probe_model + "_probe_weights.npy", weights)
         postprocess_and_log_metrics(dict(zip(label_keys, score)), prefix="concat_",
                                     suffix="_r2_"+ probe_model)
-        wandb.run.summary.update({"dci_c_" + probe_model :dci_c, "dci_d_" + probe_model:dci_d})
+
