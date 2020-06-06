@@ -105,7 +105,7 @@ def get_encoder(args, sample_frame):
     width_height = np.asarray(sample_frame.shape[2:])
     if args.method == "stdim":
         encoder = STDIMEncoder(input_channels,
-                               global_vector_len=args.global_vector_len)
+                               global_vector_len=args.num_slots*args.slot_len)
     elif args.method in ["slot-stdim", "supervised", "random-cnn", "cswm"]:
         encoder = SlotSTDIMEncoder(input_channels,
                                    num_slots=args.num_slots,
