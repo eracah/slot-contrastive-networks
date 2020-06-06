@@ -140,7 +140,7 @@ def get_model(encoder, args, label_keys):
 
 
     elif args.method == "stdim":
-        model = STDIMModel(encoder, args, args.global_vector_len, device, wandb).to(device)
+        model = STDIMModel(encoder, args, args.slot_len*args.num_slots, device, wandb).to(device)
 
     elif args.method == "slot-stdim":
         model = SlotSTDIMModel(encoder, args, device, wandb).to(device)
